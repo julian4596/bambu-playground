@@ -202,21 +202,61 @@ module skeleton_base() {
         }
     }
     
-    // Extension fill walls (solid fill for extension areas)
-    // Left extension fill
-    if (ext_L > 0.01)
-        cube([ext_L, total_d, PROFILE_H]);
-    // Right extension fill
-    if (ext_R > 0.01)
-        translate([total_w - ext_R, 0, 0])
-            cube([ext_R, total_d, PROFILE_H]);
-    // Front extension fill
-    if (ext_F > 0.01)
-        cube([total_w, ext_F, PROFILE_H]);
-    // Back extension fill
-    if (ext_B > 0.01)
-        translate([0, total_d - ext_B, 0])
-            cube([total_w, ext_B, PROFILE_H]);
+    // Extension areas — lightweight perimeter + cross-brace ribs
+    // Instead of solid-filling the extension zones, we place:
+    //   1. A thin perimeter wall at the outer edge
+    //   2. Ribs extending each grid wall into the extension zone
+    
+    // Left extension: perimeter wall + horizontal ribs
+    if (ext_L > 0.01) {
+        // Outer perimeter wall
+        cube([wt, total_d, PROFILE_H]);
+        // Cross-brace ribs extending each horizontal grid wall
+        for (iy = [0:gy]) {
+            y = ext_F + iy * GRID_PITCH;
+            wy = max(0, min(y - wt/2, total_d - wt));
+            translate([0, wy, 0])
+                cube([ext_L, wt, PROFILE_H]);
+        }
+    }
+    // Right extension: perimeter wall + horizontal ribs
+    if (ext_R > 0.01) {
+        // Outer perimeter wall
+        translate([total_w - wt, 0, 0])
+            cube([wt, total_d, PROFILE_H]);
+        // Cross-brace ribs extending each horizontal grid wall
+        for (iy = [0:gy]) {
+            y = ext_F + iy * GRID_PITCH;
+            wy = max(0, min(y - wt/2, total_d - wt));
+            translate([total_w - ext_R, wy, 0])
+                cube([ext_R, wt, PROFILE_H]);
+        }
+    }
+    // Front extension: perimeter wall + vertical ribs
+    if (ext_F > 0.01) {
+        // Outer perimeter wall
+        cube([total_w, wt, PROFILE_H]);
+        // Cross-brace ribs extending each vertical grid wall
+        for (ix = [0:gx]) {
+            x = ext_L + ix * GRID_PITCH;
+            wx = max(0, min(x - wt/2, total_w - wt));
+            translate([wx, 0, 0])
+                cube([wt, ext_F, PROFILE_H]);
+        }
+    }
+    // Back extension: perimeter wall + vertical ribs
+    if (ext_B > 0.01) {
+        // Outer perimeter wall
+        translate([0, total_d - wt, 0])
+            cube([total_w, wt, PROFILE_H]);
+        // Cross-brace ribs extending each vertical grid wall
+        for (ix = [0:gx]) {
+            x = ext_L + ix * GRID_PITCH;
+            wx = max(0, min(x - wt/2, total_w - wt));
+            translate([wx, total_d - ext_B, 0])
+                cube([wt, ext_B, PROFILE_H]);
+        }
+    }
 }
 
 // Standard base: skeleton + thin floor
