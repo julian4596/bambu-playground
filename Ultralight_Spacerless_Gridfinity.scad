@@ -152,21 +152,10 @@ echo(str("Tiling: ", tiles_x, " x ", tiles_y, " tiles (", cells_per_tile_x, "x",
 // Origin at center XY, bottom at Z=0.
 module pocket() {
     if (style == 0) {
-        // Super Light profile: No bottom chamfer. Base sits flat on bed.
-        // We only subtract the top chamfer and the inner square.
-        // Height is shifted down by CHAMFER_BOT_H.
-        hull() {
-            translate([0, 0, WALL_VERT_H])
-                centered_rect(POCKET_MID, POCKET_MID, 0.01);
-            translate([0, 0, WALL_VERT_H + CHAMFER_TOP_H])
-                centered_rect(POCKET_TOP, POCKET_TOP, 0.01);
-        }
-        translate([0, 0, WALL_VERT_H + CHAMFER_TOP_H])
-            centered_rect(POCKET_TOP, POCKET_TOP, 1);
-            
-        // Subtract the inner hole straight down
+        // Super Light profile: Flat grid, no chamfers.
+        // We just subtract the inner square up to 3mm (fully cuts the 2.0mm tall base).
         translate([0, 0, -1])
-            centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H + 2);
+            centered_rect(POCKET_MID, POCKET_MID, 4);
     } else {
         // Standard Gridfinity profile
         hull() {
@@ -209,8 +198,9 @@ module solid_base() {
 // Ultralight skeleton: flat wide grid lines (Style 0) or thin walls (Style 1/2)
 module skeleton_base() {
     // For style 0, walls are exactly the width between pockets (4.8mm) and sit flat
+    // Height is exactly 2.0mm, yielding ~20g of filament for a 4x4 grid.
     wt = (style == 0) ? (GRID_PITCH - POCKET_MID) : WALL_MIN;
-    h = (style == 0) ? (PROFILE_H - CHAMFER_BOT_H) : PROFILE_H;
+    h = (style == 0) ? 2.0 : PROFILE_H;
     
     wt_cut = max(wt, 8); // Thicker wall for tile cut boundaries
     
@@ -237,16 +227,18 @@ module skeleton_base() {
             cube([total_w, cur_wt, h]);
     }
     
-    // Reinforcement posts at every intersection
-    ps = wt * 2.5;
-    for (ix = [0:gx]) {
-        for (iy = [0:gy]) {
-            x = ext_L + ix * GRID_PITCH;
-            y = ext_F + iy * GRID_PITCH;
-            px = max(0, min(x - ps/2, total_w - ps));
-            py = max(0, min(y - ps/2, total_d - ps));
-            translate([px, py, 0])
-                cube([ps, ps, h]);
+    // Reinforcement posts at every intersection (only needed for thin walls)
+    if (style != 0) {
+        ps = wt * 2.5;
+        for (ix = [0:gx]) {
+            for (iy = [0:gy]) {
+                x = ext_L + ix * GRID_PITCH;
+                y = ext_F + iy * GRID_PITCH;
+                px = max(0, min(x - ps/2, total_w - ps));
+                py = max(0, min(y - ps/2, total_d - ps));
+                translate([px, py, 0])
+                    cube([ps, ps, h]);
+            }
         }
     }
     
