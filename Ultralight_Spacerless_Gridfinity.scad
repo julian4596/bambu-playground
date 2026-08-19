@@ -151,24 +151,25 @@ echo(str("Tiling: ", tiles_x, " x ", tiles_y, " tiles (", cells_per_tile_x, "x",
 module pocket() {
     if (style == 0) {
         // Super Light profile: Flat grid on bottom, no overhangs.
-        // We shift the pocket down by CHAMFER_BOT_H so the vertical section starts at Z=0
-        translate([0, 0, -CHAMFER_BOT_H]) {
-            // Vertical wall section (starts at CHAMFER_BOT_H)
-            translate([0, 0, CHAMFER_BOT_H - 1]) // extend down for clean cut
-                rounded_centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H + 1);
-            
-            // Top chamfer
-            hull() {
-                translate([0, 0, CHAMFER_BOT_H + WALL_VERT_H])
-                    rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01);
-                translate([0, 0, PROFILE_H])
-                    rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01);
-            }
-            
-            // Top extension
-            translate([0, 0, PROFILE_H])
-                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 1);
+        // The base height is `PROFILE_H - CHAMFER_BOT_H` (3.95mm), starting at Z=0.
+        // We need to perfectly subtract the bin's inner void.
+        
+        // 1. Vertical wall section (cuts from Z = -1 to Z = WALL_VERT_H)
+        translate([0, 0, -1])
+            rounded_centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H + 1);
+        
+        // 2. Top chamfer (cuts from Z = WALL_VERT_H up to 3.95mm)
+        hull() {
+            translate([0, 0, WALL_VERT_H])
+                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01);
+            translate([0, 0, WALL_VERT_H + CHAMFER_TOP_H])
+                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01);
         }
+        
+        // 3. Extend top cut (above 3.95mm) to ensure clean cut
+        translate([0, 0, WALL_VERT_H + CHAMFER_TOP_H])
+            rounded_centered_rect(POCKET_TOP, POCKET_TOP, 2);
+            
     } else {
         // Standard Gridfinity profile
         hull() {
