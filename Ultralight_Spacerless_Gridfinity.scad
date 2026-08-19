@@ -464,9 +464,9 @@ if (!enable_tiling) {
                 offset_x = (part_to_render == 0) ? tx * 20 : 0;
                 offset_y = (part_to_render == 0) ? ty * 20 : 0;
                 
-                // Center specific tile for export
-                center_x = (part_to_render > 0) ? -(ext_L + tx * cells_per_tile_x * GRID_PITCH) : 0;
-                center_y = (part_to_render > 0) ? -(ext_F + ty * cells_per_tile_y * GRID_PITCH) : 0;
+                // Center specific tile for export, or center entire exploded assembly
+                center_x = (part_to_render > 0) ? -(ext_L + tx * cells_per_tile_x * GRID_PITCH + (cells_per_tile_x * GRID_PITCH)/2) : -(total_w + (tiles_x-1)*20)/2;
+                center_y = (part_to_render > 0) ? -(ext_F + ty * cells_per_tile_y * GRID_PITCH + (cells_per_tile_y * GRID_PITCH)/2) : -(total_d + (tiles_y-1)*20)/2;
                 
                 translate([offset_x + center_x, offset_y + center_y, 0]) {
                     union() {
