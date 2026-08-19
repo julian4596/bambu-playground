@@ -90,9 +90,6 @@ bed_safe_margin_mm = 2.0; // [0:0.1:20]
 tile_gap_mm = 10.0; // [0:0.1:50]
 // Add tile coordinate labels (tiling only).
 enable_labels = true;
-// Which part to render? 0=All (Exploded View), 1=Tile 1/1, etc.
-part_to_render = 0; // [0:All (Exploded), 1:Tile 1/1, 2:Tile 2/1, 3:Tile 1/2, 4:Tile 2/2, 5:Tile 3/1, 6:Tile 3/2, 7:Tile 3/3, 8:Tile 4/1, 9:Tile 4/2, 10:Tile 4/3]
-
 /* [Hidden] */
 $fn = 40;
 
@@ -451,26 +448,48 @@ module tile_label(tx, ty) {
 }
 
 // ============================================================================
-// Render
+// Render (MakerWorld Multi-Plate Support)
 // ============================================================================
 
-if (!tiling_mode) {
-    ultralight_spacerless_baseplate();
-} else {
-    // Exploded View or specific tile
-    for (tx = [0 : tiles_x - 1]) {
-        for (ty = [0 : tiles_y - 1]) {
-            tile_index = 1 + tx + ty * tiles_x;
+module render_tile_by_index(index) {
+    if (tiling_mode) {
+        tx = (index - 1) % tiles_x;
+        ty = floor((index - 1) / tiles_x);
+        
+        if (tx < tiles_x && ty < tiles_y) {
+            // Center the specific tile perfectly on the build plate
+            center_x = -(ext_L + tx * cells_per_tile_x * GRID_PITCH + (cells_per_tile_x * GRID_PITCH)/2);
+            center_y = -(ext_F + ty * cells_per_tile_y * GRID_PITCH + (cells_per_tile_y * GRID_PITCH)/2);
             
-            if (part_to_render == 0 || part_to_render == tile_index) {
+            translate([center_x, center_y, 0]) {
+                union() {
+                    intersection() {
+                        ultralight_spacerless_baseplate();
+                        tile_mask(tx, ty);
+                    }
+                    if (enable_labels) {
+                        tile_label(tx, ty);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MakerWorld uses this to show the whole assembly in the 3D preview
+module mw_assembly_view() {
+    if (!tiling_mode) {
+        ultralight_spacerless_baseplate();
+    } else {
+        // Exploded View
+        for (tx = [0 : tiles_x - 1]) {
+            for (ty = [0 : tiles_y - 1]) {
+                offset_x = tx * tile_gap_mm;
+                offset_y = ty * tile_gap_mm;
                 
-                // Explode translation
-                offset_x = (part_to_render == 0) ? tx * tile_gap_mm : 0;
-                offset_y = (part_to_render == 0) ? ty * tile_gap_mm : 0;
-                
-                // Center specific tile for export, or center entire exploded assembly
-                center_x = (part_to_render > 0) ? -(ext_L + tx * cells_per_tile_x * GRID_PITCH + (cells_per_tile_x * GRID_PITCH)/2) : -(total_w + (tiles_x-1)*tile_gap_mm)/2;
-                center_y = (part_to_render > 0) ? -(ext_F + ty * cells_per_tile_y * GRID_PITCH + (cells_per_tile_y * GRID_PITCH)/2) : -(total_d + (tiles_y-1)*tile_gap_mm)/2;
+                // Center entire exploded assembly
+                center_x = -(total_w + (tiles_x-1)*tile_gap_mm)/2;
+                center_y = -(total_d + (tiles_y-1)*tile_gap_mm)/2;
                 
                 translate([offset_x + center_x, offset_y + center_y, 0]) {
                     union() {
@@ -487,3 +506,28 @@ if (!tiling_mode) {
         }
     }
 }
+
+// MakerWorld automatically generates separate plates from these modules
+module mw_plate_1() { if (!tiling_mode) ultralight_spacerless_baseplate(); else render_tile_by_index(1); }
+module mw_plate_2() { render_tile_by_index(2); }
+module mw_plate_3() { render_tile_by_index(3); }
+module mw_plate_4() { render_tile_by_index(4); }
+module mw_plate_5() { render_tile_by_index(5); }
+module mw_plate_6() { render_tile_by_index(6); }
+module mw_plate_7() { render_tile_by_index(7); }
+module mw_plate_8() { render_tile_by_index(8); }
+module mw_plate_9() { render_tile_by_index(9); }
+module mw_plate_10() { render_tile_by_index(10); }
+module mw_plate_11() { render_tile_by_index(11); }
+module mw_plate_12() { render_tile_by_index(12); }
+module mw_plate_13() { render_tile_by_index(13); }
+module mw_plate_14() { render_tile_by_index(14); }
+module mw_plate_15() { render_tile_by_index(15); }
+module mw_plate_16() { render_tile_by_index(16); }
+module mw_plate_17() { render_tile_by_index(17); }
+module mw_plate_18() { render_tile_by_index(18); }
+module mw_plate_19() { render_tile_by_index(19); }
+module mw_plate_20() { render_tile_by_index(20); }
+
+// Fallback for local OpenSCAD viewing
+mw_assembly_view();
