@@ -201,53 +201,72 @@ module solid_base() {
     cube([total_w, total_d, PROFILE_H]);
 }
 
+module gridfinity_ring(h) {
+    difference() {
+        rounded_centered_rect(POCKET_MID + 4.8, POCKET_MID + 4.8, h, r=6.4);
+        translate([0, 0, -1])
+            rounded_centered_rect(POCKET_MID, POCKET_MID, h + 2, r=4);
+    }
+}
+
 // Ultralight skeleton: thin walls with thick intersection hubs
 module skeleton_base() {
-    // For style 0, we use a uniform 4.8mm wall (GRID_PITCH - POCKET_MID).
-    // When the 37.2mm rounded pockets are subtracted, it leaves a perfectly smooth 
-    // continuous grid with no protruding hubs, matching the "Lightest" design precisely.
-    // We use a height of 1.8mm (WALL_VERT_H) to keep the mass down to ~14g for 4x4.
-    wt = (style == 0) ? (GRID_PITCH - POCKET_MID) : WALL_MIN;
-    h = (style == 0) ? WALL_VERT_H : PROFILE_H;
-    
-    wt_cut = max(wt, 8); // Thicker wall for tile cut boundaries
-    
-    // Walls along Y (vertical lines of the grid)
-    for (ix = [0:gx]) {
-        is_cut = tiling_mode && ix > 0 && ix < gx && (ix % cells_per_tile_x == 0);
-        cur_wt = is_cut ? wt_cut : wt;
-        
-        x = ext_L + ix * GRID_PITCH;
-        // Center the wall on the grid line
-        wx = max(0, min(x - cur_wt/2, total_w - cur_wt));
-        translate([wx, 0, 0])
-            cube([cur_wt, total_d, h]);
-    }
-    
-    // Walls along X (horizontal lines of the grid)
-    for (iy = [0:gy]) {
-        is_cut = tiling_mode && iy > 0 && iy < gy && (iy % cells_per_tile_y == 0);
-        cur_wt = is_cut ? wt_cut : wt;
-        
-        y = ext_F + iy * GRID_PITCH;
-        wy = max(0, min(y - cur_wt/2, total_d - cur_wt));
-        translate([0, wy, 0])
-            cube([total_w, cur_wt, h]);
-    }
-    
-    // Reinforcement hubs at every intersection 
-    // (Only needed to fill the diagonal gap at the corners before pocket carving)
-    ps = (style == 0) ? 12 : wt * 2.5; 
-    for (ix = [0:gx]) {
-        for (iy = [0:gy]) {
-            x = ext_L + ix * GRID_PITCH;
-            y = ext_F + iy * GRID_PITCH;
-            px = max(0, min(x - ps/2, total_w - ps));
-            py = max(0, min(y - ps/2, total_d - ps));
-            translate([px, py, 0])
-                cube([ps, ps, h]);
+    if (style == 0) {
+        // "Lightest Baseplate" style: Use offset rings that perfectly merge
+        // on the straights (forming 4.8mm walls) and pull away at the corners
+        // (forming diamond holes). The outer boundary naturally has r=6.4 corners.
+        h = WALL_VERT_H; // 1.8mm height for max weight savings
+        for (ix = [0:gx-1]) {
+            for (iy = [0:gy-1]) {
+                x = ext_L + ix * GRID_PITCH + GRID_PITCH/2;
+                y = ext_F + iy * GRID_PITCH + GRID_PITCH/2;
+                translate([x, y, 0])
+                    gridfinity_ring(h);
+            }
         }
-    }
+        
+        // Ensure extensions are drawn if they exist
+        if (ext_L > 0.01) { translate([0, ext_F, 0]) cube([ext_L, gy * GRID_PITCH, h]); }
+        if (ext_R > 0.01) { translate([ext_L + gx * GRID_PITCH, ext_F, 0]) cube([ext_R, gy * GRID_PITCH, h]); }
+        if (ext_F > 0.01) { translate([0, 0, 0]) cube([total_w, ext_F, h]); }
+        if (ext_B > 0.01) { translate([0, ext_F + gy * GRID_PITCH, 0]) cube([total_w, ext_B, h]); }
+        
+    } else {
+        wt = WALL_MIN;
+        h = PROFILE_H;
+        wt_cut = max(wt, 8); // Thicker wall for tile cut boundaries
+        
+        // Walls along Y (vertical lines of the grid)
+        for (ix = [0:gx]) {
+            is_cut = tiling_mode && ix > 0 && ix < gx && (ix % cells_per_tile_x == 0);
+            cur_wt = is_cut ? wt_cut : wt;
+            
+            x = ext_L + ix * GRID_PITCH;
+            wx = max(0, min(x - cur_wt/2, total_w - cur_wt));
+            translate([wx, 0, 0]) cube([cur_wt, total_d, h]);
+        }
+        
+        // Walls along X (horizontal lines of the grid)
+        for (iy = [0:gy]) {
+            is_cut = tiling_mode && iy > 0 && iy < gy && (iy % cells_per_tile_y == 0);
+            cur_wt = is_cut ? wt_cut : wt;
+            
+            y = ext_F + iy * GRID_PITCH;
+            wy = max(0, min(y - cur_wt/2, total_d - cur_wt));
+            translate([0, wy, 0]) cube([total_w, cur_wt, h]);
+        }
+        
+        // Reinforcement hubs at every intersection
+        ps = wt * 2.5; 
+        for (ix = [0:gx]) {
+            for (iy = [0:gy]) {
+                x = ext_L + ix * GRID_PITCH;
+                y = ext_F + iy * GRID_PITCH;
+                px = max(0, min(x - ps/2, total_w - ps));
+                py = max(0, min(y - ps/2, total_d - ps));
+                translate([px, py, 0]) cube([ps, ps, h]);
+            }
+        }
     
     // Extension areas — lightweight perimeter + cross-brace ribs
     // Left extension: perimeter wall + horizontal ribs
@@ -277,13 +296,14 @@ module skeleton_base() {
             translate([wx, 0, 0]) cube([wt, ext_F, h]);
         }
     }
-    // Back extension
-    if (ext_B > 0.01) {
-        translate([0, total_d - wt, 0]) cube([total_w, wt, h]);
-        for (ix = [0:gx]) {
-            x = ext_L + ix * GRID_PITCH;
-            wx = max(0, min(x - wt/2, total_w - wt));
-            translate([wx, total_d - ext_B, 0]) cube([wt, ext_B, h]);
+        // Back extension
+        if (ext_B > 0.01) {
+            translate([0, total_d - wt, 0]) cube([total_w, wt, h]);
+            for (ix = [0:gx]) {
+                x = ext_L + ix * GRID_PITCH;
+                wx = max(0, min(x - wt/2, total_w - wt));
+                translate([wx, total_d - ext_B, 0]) cube([wt, ext_B, h]);
+            }
         }
     }
 }
@@ -343,13 +363,15 @@ module ultralight_spacerless_baseplate() {
         else
             solid_full_base();
         
-        // Subtract pockets for every grid cell
-        for (cx = [0:gx-1]) {
-            for (cy = [0:gy-1]) {
-                x = ext_L + cx * GRID_PITCH + GRID_PITCH / 2;
-                y = ext_F + cy * GRID_PITCH + GRID_PITCH / 2;
-                translate([x, y, -0.01])
-                    pocket();
+        // Subtract pockets for every grid cell (only for non-ring styles)
+        if (style != 0) {
+            for (cx = [0:gx-1]) {
+                for (cy = [0:gy-1]) {
+                    x = ext_L + cx * GRID_PITCH + GRID_PITCH / 2;
+                    y = ext_F + cy * GRID_PITCH + GRID_PITCH / 2;
+                    translate([x, y, -0.01])
+                        pocket();
+                }
             }
         }
         
