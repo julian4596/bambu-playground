@@ -77,6 +77,22 @@ magnet_holes = false;
 // Add M3 screw holes at grid intersections
 screw_holes = false;
 
+/* [06 — Print Bed Tiling] */
+// Splitcut the generated plate (manual or auto-fit) into bed-sized tiles.
+tiling_mode = true;
+// Bed width in mm (tiling only).
+bed_x_mm = 256.0; // [100:0.1:500]
+// Bed depth in mm (tiling only).
+bed_y_mm = 256.0; // [100:0.1:500]
+// Reserved margin per bed edge in mm (tiling only).
+bed_safe_margin_mm = 2.0; // [0:0.1:20]
+// Gap between tiles in mm (scene only).
+tile_gap_mm = 10.0; // [0:0.1:50]
+// Add tile coordinate labels (tiling only).
+enable_labels = true;
+// Which part to render? 0=All (Exploded View), 1=Tile 1/1, etc.
+part_to_render = 0; // [0:All (Exploded), 1:Tile 1/1, 2:Tile 2/1, 3:Tile 1/2, 4:Tile 2/2, 5:Tile 3/1, 6:Tile 3/2, 7:Tile 3/3, 8:Tile 4/1, 9:Tile 4/2, 10:Tile 4/3]
+
 /* [Hidden] */
 $fn = 40;
 
@@ -112,12 +128,21 @@ ext_B = (extension_mode == 0) ? ext_ty - floor(ext_ty / 2) :
 total_w = gx * GRID_PITCH + ext_L + ext_R;
 total_d = gy * GRID_PITCH + ext_F + ext_B;
 
+// Tiling calculations
+// We reserve margin for the physical bed edge + ~15mm for puzzle joints & frame extensions
+cells_per_tile_x = tiling_mode ? max(1, floor((bed_x_mm - 2 * bed_safe_margin_mm - 15) / GRID_PITCH)) : gx;
+cells_per_tile_y = tiling_mode ? max(1, floor((bed_y_mm - 2 * bed_safe_margin_mm - 15) / GRID_PITCH)) : gy;
+
+tiles_x = tiling_mode ? ceil(gx / cells_per_tile_x) : 1;
+tiles_y = tiling_mode ? ceil(gy / cells_per_tile_y) : 1;
+
 // Debug output
 echo(str("=== Ultralight Spacerless Gridfinity ==="));
 echo(str("Grid: ", gx, " x ", gy));
 echo(str("Extensions — L:", ext_L, " R:", ext_R, " F:", ext_F, " B:", ext_B, " mm"));
 echo(str("Total: ", total_w, " x ", total_d, " mm"));
 echo(str("Style: ", style == 0 ? "Ultralight" : style == 1 ? "Standard" : "Solid"));
+echo(str("Tiling: ", tiles_x, " x ", tiles_y, " tiles (", cells_per_tile_x, "x", cells_per_tile_y, " max cells per tile)"));
 
 // ============================================================================
 // Modules — Profile Geometry
@@ -171,22 +196,29 @@ module solid_base() {
 // Ultralight skeleton: only grid-line walls + corner posts
 module skeleton_base() {
     wt = WALL_MIN;
+    wt_cut = 8; // Thicker wall for tile cut boundaries
     
     // Walls along Y (vertical lines of the grid)
     for (ix = [0:gx]) {
+        is_cut = tiling_mode && ix > 0 && ix < gx && (ix % cells_per_tile_x == 0);
+        cur_wt = is_cut ? wt_cut : wt;
+        
         x = ext_L + ix * GRID_PITCH;
         // Center the wall on the grid line
-        wx = max(0, min(x - wt/2, total_w - wt));
+        wx = max(0, min(x - cur_wt/2, total_w - cur_wt));
         translate([wx, 0, 0])
-            cube([wt, total_d, PROFILE_H]);
+            cube([cur_wt, total_d, PROFILE_H]);
     }
     
     // Walls along X (horizontal lines of the grid)
     for (iy = [0:gy]) {
+        is_cut = tiling_mode && iy > 0 && iy < gy && (iy % cells_per_tile_y == 0);
+        cur_wt = is_cut ? wt_cut : wt;
+        
         y = ext_F + iy * GRID_PITCH;
-        wy = max(0, min(y - wt/2, total_d - wt));
+        wy = max(0, min(y - cur_wt/2, total_d - cur_wt));
         translate([0, wy, 0])
-            cube([total_w, wt, PROFILE_H]);
+            cube([total_w, cur_wt, PROFILE_H]);
     }
     
     // Reinforcement posts at every intersection
@@ -331,7 +363,127 @@ module ultralight_spacerless_baseplate() {
 }
 
 // ============================================================================
+// Tile Masking & Dovetails
+// ============================================================================
+
+module puzzle_tab(clearance=0) {
+    // Connects from X=0 to X=4, circle at X=4
+    translate([4, 0, 0]) cylinder(d=8 + clearance, h=PROFILE_H+4, center=true);
+    translate([2, 0, 0]) cube([4 + clearance, 4 + clearance, PROFILE_H+4], center=true);
+}
+
+module tile_mask(tx, ty) {
+    start_cx = tx * cells_per_tile_x;
+    end_cx = min(gx, (tx + 1) * cells_per_tile_x);
+    
+    start_cy = ty * cells_per_tile_y;
+    end_cy = min(gy, (ty + 1) * cells_per_tile_y);
+    
+    x_min = (tx == 0) ? -50 : (ext_L + start_cx * GRID_PITCH);
+    x_max = (tx == tiles_x - 1) ? total_w + 50 : (ext_L + end_cx * GRID_PITCH);
+    
+    y_min = (ty == 0) ? -50 : (ext_F + start_cy * GRID_PITCH);
+    y_max = (ty == tiles_y - 1) ? total_d + 50 : (ext_F + end_cy * GRID_PITCH);
+    
+    w = x_max - x_min;
+    d = y_max - y_min;
+    
+    difference() {
+        union() {
+            // Main bounding box for this tile
+            translate([x_min, y_min, -2])
+                cube([w, d, PROFILE_H + 4]);
+                
+            // Add tabs on the right edge (if not last tile)
+            if (tx < tiles_x - 1) {
+                for (cy = [start_cy : end_cy - 1]) {
+                    y = ext_F + cy * GRID_PITCH + GRID_PITCH/2;
+                    translate([x_max, y, PROFILE_H/2 - 1])
+                        puzzle_tab(0);
+                }
+            }
+            
+            // Add tabs on the top edge (if not last tile)
+            if (ty < tiles_y - 1) {
+                for (cx = [start_cx : end_cx - 1]) {
+                    x = ext_L + cx * GRID_PITCH + GRID_PITCH/2;
+                    translate([x, y_max, PROFILE_H/2 - 1])
+                        rotate([0, 0, 90]) puzzle_tab(0);
+                }
+            }
+        }
+        
+        // Subtract tabs on the left edge (if not first tile)
+        if (tx > 0) {
+            for (cy = [start_cy : end_cy - 1]) {
+                y = ext_F + cy * GRID_PITCH + GRID_PITCH/2;
+                translate([x_min, y, PROFILE_H/2 - 1])
+                    puzzle_tab(0.2); // 0.2mm clearance for easy fit
+            }
+        }
+        
+        // Subtract tabs on the bottom edge (if not first tile)
+        if (ty > 0) {
+            for (cx = [start_cx : end_cx - 1]) {
+                x = ext_L + cx * GRID_PITCH + GRID_PITCH/2;
+                translate([x, y_min, PROFILE_H/2 - 1])
+                    rotate([0, 0, 90]) puzzle_tab(0.2); // 0.2mm clearance
+            }
+        }
+    }
+}
+
+module tile_label(tx, ty) {
+    start_cx = tx * cells_per_tile_x;
+    start_cy = ty * cells_per_tile_y;
+    x = ext_L + start_cx * GRID_PITCH + GRID_PITCH/2;
+    y = ext_F + start_cy * GRID_PITCH + GRID_PITCH/2;
+    
+    translate([x, y, 0]) {
+        difference() {
+            // Thin floor
+            translate([0, 0, 0.4]) cube([POCKET_BOT, POCKET_BOT, 0.8], center=true);
+            // Cut text through it
+            translate([0, 0, -1]) linear_extrude(3)
+                text(str(tx+1, "/", ty+1), size=8, halign="center", valign="center");
+        }
+    }
+}
+
+// ============================================================================
 // Render
 // ============================================================================
 
-ultralight_spacerless_baseplate();
+if (!tiling_mode) {
+    ultralight_spacerless_baseplate();
+} else {
+    // Exploded View or specific tile
+    for (tx = [0 : tiles_x - 1]) {
+        for (ty = [0 : tiles_y - 1]) {
+            tile_index = 1 + tx + ty * tiles_x;
+            
+            if (part_to_render == 0 || part_to_render == tile_index) {
+                
+                // Explode translation
+                offset_x = (part_to_render == 0) ? tx * tile_gap_mm : 0;
+                offset_y = (part_to_render == 0) ? ty * tile_gap_mm : 0;
+                
+                // Center specific tile for export, or center entire exploded assembly
+                center_x = (part_to_render > 0) ? -(ext_L + tx * cells_per_tile_x * GRID_PITCH + (cells_per_tile_x * GRID_PITCH)/2) : -(total_w + (tiles_x-1)*tile_gap_mm)/2;
+                center_y = (part_to_render > 0) ? -(ext_F + ty * cells_per_tile_y * GRID_PITCH + (cells_per_tile_y * GRID_PITCH)/2) : -(total_d + (tiles_y-1)*tile_gap_mm)/2;
+                
+                translate([offset_x + center_x, offset_y + center_y, 0]) {
+                    union() {
+                        intersection() {
+                            ultralight_spacerless_baseplate();
+                            tile_mask(tx, ty);
+                        }
+                        if (enable_labels) {
+                            tile_label(tx, ty);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
