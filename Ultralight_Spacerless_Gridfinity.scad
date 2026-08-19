@@ -77,17 +77,21 @@ magnet_holes = false;
 // Add M3 screw holes at grid intersections
 screw_holes = false;
 
-/* [06 — Tiling (Split for Printing)] */
-// Enable automatic splitting into printable tiles?
-enable_tiling = true;
-// Max print bed width (X) in mm
-max_bed_x = 250; // [100:1:500]
-// Max print bed depth (Y) in mm
-max_bed_y = 250; // [100:1:500]
+/* [06 — Print Bed Tiling] */
+// Splitcut the generated plate (manual or auto-fit) into bed-sized tiles.
+tiling_mode = true;
+// Bed width in mm (tiling only).
+bed_x_mm = 256.0; // [100:0.1:500]
+// Bed depth in mm (tiling only).
+bed_y_mm = 256.0; // [100:0.1:500]
+// Reserved margin per bed edge in mm (tiling only).
+bed_safe_margin_mm = 2.0; // [0:0.1:20]
+// Gap between tiles in mm (scene only).
+tile_gap_mm = 10.0; // [0:0.1:50]
+// Add tile coordinate labels (tiling only).
+enable_labels = true;
 // Which part to render? 0=All (Exploded View), 1=Tile 1/1, etc.
 part_to_render = 0; // [0:All (Exploded), 1:Tile 1/1, 2:Tile 2/1, 3:Tile 1/2, 4:Tile 2/2, 5:Tile 3/1, 6:Tile 3/2, 7:Tile 3/3, 8:Tile 4/1, 9:Tile 4/2, 10:Tile 4/3]
-// Emboss tile labels (e.g., 1/1) into the corner of each tile?
-enable_labels = true;
 
 /* [Hidden] */
 $fn = 40;
@@ -125,12 +129,12 @@ total_w = gx * GRID_PITCH + ext_L + ext_R;
 total_d = gy * GRID_PITCH + ext_F + ext_B;
 
 // Tiling calculations
-// We reserve ~30mm for the extensions on the edges and the puzzle tabs
-cells_per_tile_x = enable_tiling ? max(1, floor((max_bed_x - 30) / GRID_PITCH)) : gx;
-cells_per_tile_y = enable_tiling ? max(1, floor((max_bed_y - 30) / GRID_PITCH)) : gy;
+// We reserve margin for the physical bed edge + ~15mm for puzzle joints & frame extensions
+cells_per_tile_x = tiling_mode ? max(1, floor((bed_x_mm - 2 * bed_safe_margin_mm - 15) / GRID_PITCH)) : gx;
+cells_per_tile_y = tiling_mode ? max(1, floor((bed_y_mm - 2 * bed_safe_margin_mm - 15) / GRID_PITCH)) : gy;
 
-tiles_x = enable_tiling ? ceil(gx / cells_per_tile_x) : 1;
-tiles_y = enable_tiling ? ceil(gy / cells_per_tile_y) : 1;
+tiles_x = tiling_mode ? ceil(gx / cells_per_tile_x) : 1;
+tiles_y = tiling_mode ? ceil(gy / cells_per_tile_y) : 1;
 
 // Debug output
 echo(str("=== Ultralight Spacerless Gridfinity ==="));
@@ -196,7 +200,7 @@ module skeleton_base() {
     
     // Walls along Y (vertical lines of the grid)
     for (ix = [0:gx]) {
-        is_cut = enable_tiling && ix > 0 && ix < gx && (ix % cells_per_tile_x == 0);
+        is_cut = tiling_mode && ix > 0 && ix < gx && (ix % cells_per_tile_x == 0);
         cur_wt = is_cut ? wt_cut : wt;
         
         x = ext_L + ix * GRID_PITCH;
@@ -208,7 +212,7 @@ module skeleton_base() {
     
     // Walls along X (horizontal lines of the grid)
     for (iy = [0:gy]) {
-        is_cut = enable_tiling && iy > 0 && iy < gy && (iy % cells_per_tile_y == 0);
+        is_cut = tiling_mode && iy > 0 && iy < gy && (iy % cells_per_tile_y == 0);
         cur_wt = is_cut ? wt_cut : wt;
         
         y = ext_F + iy * GRID_PITCH;
@@ -450,7 +454,7 @@ module tile_label(tx, ty) {
 // Render
 // ============================================================================
 
-if (!enable_tiling) {
+if (!tiling_mode) {
     ultralight_spacerless_baseplate();
 } else {
     // Exploded View or specific tile
@@ -461,12 +465,12 @@ if (!enable_tiling) {
             if (part_to_render == 0 || part_to_render == tile_index) {
                 
                 // Explode translation
-                offset_x = (part_to_render == 0) ? tx * 20 : 0;
-                offset_y = (part_to_render == 0) ? ty * 20 : 0;
+                offset_x = (part_to_render == 0) ? tx * tile_gap_mm : 0;
+                offset_y = (part_to_render == 0) ? ty * tile_gap_mm : 0;
                 
                 // Center specific tile for export, or center entire exploded assembly
-                center_x = (part_to_render > 0) ? -(ext_L + tx * cells_per_tile_x * GRID_PITCH + (cells_per_tile_x * GRID_PITCH)/2) : -(total_w + (tiles_x-1)*20)/2;
-                center_y = (part_to_render > 0) ? -(ext_F + ty * cells_per_tile_y * GRID_PITCH + (cells_per_tile_y * GRID_PITCH)/2) : -(total_d + (tiles_y-1)*20)/2;
+                center_x = (part_to_render > 0) ? -(ext_L + tx * cells_per_tile_x * GRID_PITCH + (cells_per_tile_x * GRID_PITCH)/2) : -(total_w + (tiles_x-1)*tile_gap_mm)/2;
+                center_y = (part_to_render > 0) ? -(ext_F + ty * cells_per_tile_y * GRID_PITCH + (cells_per_tile_y * GRID_PITCH)/2) : -(total_d + (tiles_y-1)*tile_gap_mm)/2;
                 
                 translate([offset_x + center_x, offset_y + center_y, 0]) {
                     union() {
