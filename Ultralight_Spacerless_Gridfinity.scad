@@ -148,42 +148,63 @@ echo(str("Tiling: ", tiles_x, " x ", tiles_y, " tiles (", cells_per_tile_x, "x",
 // Modules — Profile Geometry
 // ============================================================================
 
-// Creates the pocket void for one grid cell.
-// Origin at center XY, bottom at Z=0.
 module pocket() {
     if (style == 0) {
-        // Super Light profile: Flat grid, no chamfers.
-        // We just subtract the inner square up to 3mm (fully cuts the 2.0mm tall base).
-        translate([0, 0, -1])
-            centered_rect(POCKET_MID, POCKET_MID, 4);
+        // Super Light profile: Flat grid on bottom, no overhangs.
+        // We shift the pocket down by CHAMFER_BOT_H so the vertical section starts at Z=0
+        translate([0, 0, -CHAMFER_BOT_H]) {
+            // Vertical wall section (starts at CHAMFER_BOT_H)
+            translate([0, 0, CHAMFER_BOT_H - 1]) // extend down for clean cut
+                rounded_centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H + 1);
+            
+            // Top chamfer
+            hull() {
+                translate([0, 0, CHAMFER_BOT_H + WALL_VERT_H])
+                    rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01);
+                translate([0, 0, PROFILE_H])
+                    rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01);
+            }
+            
+            // Top extension
+            translate([0, 0, PROFILE_H])
+                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 1);
+        }
     } else {
         // Standard Gridfinity profile
         hull() {
             translate([0, 0, 0])
-                centered_rect(POCKET_BOT, POCKET_BOT, 0.01);
+                rounded_centered_rect(POCKET_BOT, POCKET_BOT, 0.01);
             translate([0, 0, CHAMFER_BOT_H])
-                centered_rect(POCKET_MID, POCKET_MID, 0.01);
+                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01);
         }
         
         translate([0, 0, CHAMFER_BOT_H])
-            centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H);
+            rounded_centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H);
         
         hull() {
             translate([0, 0, CHAMFER_BOT_H + WALL_VERT_H])
-                centered_rect(POCKET_MID, POCKET_MID, 0.01);
+                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01);
             translate([0, 0, PROFILE_H])
-                centered_rect(POCKET_TOP, POCKET_TOP, 0.01);
+                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01);
         }
         
         translate([0, 0, PROFILE_H])
-            centered_rect(POCKET_TOP, POCKET_TOP, 1);
+            rounded_centered_rect(POCKET_TOP, POCKET_TOP, 1);
     }
 }
 
-// Helper: centered rectangle (cube centered on XY, bottom at current Z)
-module centered_rect(w, d, h) {
-    translate([-w/2, -d/2, 0])
-        cube([w, d, h]);
+// Helper: rounded centered rectangle (matching standard 4mm Gridfinity corner radius)
+module rounded_centered_rect(w, d, h, r=4) {
+    // If the dimension is somehow smaller than the radius, cap the radius
+    eff_r = min(r, w/2, d/2);
+    hull() {
+        for (x = [-w/2 + eff_r, w/2 - eff_r]) {
+            for (y = [-d/2 + eff_r, d/2 - eff_r]) {
+                translate([x, y, 0])
+                    cylinder(r=eff_r, h=h);
+            }
+        }
+    }
 }
 
 // ============================================================================
@@ -195,12 +216,12 @@ module solid_base() {
     cube([total_w, total_d, PROFILE_H]);
 }
 
-// Ultralight skeleton: flat wide grid lines (Style 0) or thin walls (Style 1/2)
+// Ultralight skeleton: thin walls with thick intersection hubs
 module skeleton_base() {
-    // For style 0, walls are exactly the width between pockets (4.8mm) and sit flat
-    // Height is exactly 2.0mm, yielding ~20g of filament for a 4x4 grid.
-    wt = (style == 0) ? (GRID_PITCH - POCKET_MID) : WALL_MIN;
-    h = (style == 0) ? 2.0 : PROFILE_H;
+    // For style 0, we use thin lines (1.2mm) but thick intersection hubs (11mm)
+    // When rounded pockets are subtracted, the hubs perfectly match the bin corners.
+    wt = WALL_MIN;
+    h = (style == 0) ? (PROFILE_H - CHAMFER_BOT_H) : PROFILE_H;
     
     wt_cut = max(wt, 8); // Thicker wall for tile cut boundaries
     
@@ -227,18 +248,16 @@ module skeleton_base() {
             cube([total_w, cur_wt, h]);
     }
     
-    // Reinforcement posts at every intersection (only needed for thin walls)
-    if (style != 0) {
-        ps = wt * 2.5;
-        for (ix = [0:gx]) {
-            for (iy = [0:gy]) {
-                x = ext_L + ix * GRID_PITCH;
-                y = ext_F + iy * GRID_PITCH;
-                px = max(0, min(x - ps/2, total_w - ps));
-                py = max(0, min(y - ps/2, total_d - ps));
-                translate([px, py, 0])
-                    cube([ps, ps, h]);
-            }
+    // Reinforcement hubs at every intersection (vital for Style 0 corner cradling)
+    ps = (style == 0) ? 11 : wt * 2.5; 
+    for (ix = [0:gx]) {
+        for (iy = [0:gy]) {
+            x = ext_L + ix * GRID_PITCH;
+            y = ext_F + iy * GRID_PITCH;
+            px = max(0, min(x - ps/2, total_w - ps));
+            py = max(0, min(y - ps/2, total_d - ps));
+            translate([px, py, 0])
+                cube([ps, ps, h]);
         }
     }
     
