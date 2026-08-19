@@ -150,26 +150,10 @@ echo(str("Tiling: ", tiles_x, " x ", tiles_y, " tiles (", cells_per_tile_x, "x",
 
 module pocket() {
     if (style == 0) {
-        // Super Light profile: Flat grid on bottom, no overhangs.
-        // The base height is `PROFILE_H - CHAMFER_BOT_H` (3.95mm), starting at Z=0.
-        // We need to perfectly subtract the bin's inner void.
-        
-        // 1. Vertical wall section (cuts from Z = -1 to Z = WALL_VERT_H)
+        // Super Light profile: perfectly smooth uniform walls.
+        // The base is 1.8mm tall (sits flat). We just subtract a straight rounded 37.2mm hole.
         translate([0, 0, -1])
-            rounded_centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H + 1);
-        
-        // 2. Top chamfer (cuts from Z = WALL_VERT_H up to 3.95mm)
-        hull() {
-            translate([0, 0, WALL_VERT_H])
-                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01);
-            translate([0, 0, WALL_VERT_H + CHAMFER_TOP_H])
-                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01);
-        }
-        
-        // 3. Extend top cut (above 3.95mm) to ensure clean cut
-        translate([0, 0, WALL_VERT_H + CHAMFER_TOP_H])
-            rounded_centered_rect(POCKET_TOP, POCKET_TOP, 2);
-            
+            rounded_centered_rect(POCKET_MID, POCKET_MID, PROFILE_H + 2);
     } else {
         // Standard Gridfinity profile
         hull() {
@@ -219,10 +203,12 @@ module solid_base() {
 
 // Ultralight skeleton: thin walls with thick intersection hubs
 module skeleton_base() {
-    // For style 0, we use thin lines (1.2mm) but thick intersection hubs (11mm)
-    // When rounded pockets are subtracted, the hubs perfectly match the bin corners.
-    wt = WALL_MIN;
-    h = (style == 0) ? (PROFILE_H - CHAMFER_BOT_H) : PROFILE_H;
+    // For style 0, we use a uniform 4.8mm wall (GRID_PITCH - POCKET_MID).
+    // When the 37.2mm rounded pockets are subtracted, it leaves a perfectly smooth 
+    // continuous grid with no protruding hubs, matching the "Lightest" design precisely.
+    // We use a height of 1.8mm (WALL_VERT_H) to keep the mass down to ~14g for 4x4.
+    wt = (style == 0) ? (GRID_PITCH - POCKET_MID) : WALL_MIN;
+    h = (style == 0) ? WALL_VERT_H : PROFILE_H;
     
     wt_cut = max(wt, 8); // Thicker wall for tile cut boundaries
     
@@ -249,8 +235,9 @@ module skeleton_base() {
             cube([total_w, cur_wt, h]);
     }
     
-    // Reinforcement hubs at every intersection (vital for Style 0 corner cradling)
-    ps = (style == 0) ? 11 : wt * 2.5; 
+    // Reinforcement hubs at every intersection 
+    // (Only needed to fill the diagonal gap at the corners before pocket carving)
+    ps = (style == 0) ? 12 : wt * 2.5; 
     for (ix = [0:gx]) {
         for (iy = [0:gy]) {
             x = ext_L + ix * GRID_PITCH;
