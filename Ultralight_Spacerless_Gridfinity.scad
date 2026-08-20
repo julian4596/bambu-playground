@@ -150,9 +150,13 @@ echo(str("Tiling: ", tiles_x, " x ", tiles_y, " tiles (", cells_per_tile_x, "x",
 
 module pocket() {
     if (style == 0) {
-        // Dual-level underside flange / stepped inner recess
-        translate([0, 0, -0.01])
-            rounded_centered_rect(POCKET_TOP, POCKET_TOP, CHAMFER_BOT_H + 0.01, r=4);
+        // Dual-level underside flange with sweeping chamfer (uncapped)
+        hull() {
+            translate([0, 0, -0.01])
+                rounded_centered_rect(POCKET_TOP + 2 * CHAMFER_BOT_H, POCKET_TOP + 2 * CHAMFER_BOT_H, 0.01, r=4 + CHAMFER_BOT_H);
+            translate([0, 0, CHAMFER_BOT_H])
+                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01, r=4);
+        }
     } else {
         // Standard Gridfinity bottom chamfer
         hull() {
