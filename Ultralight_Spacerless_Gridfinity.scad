@@ -149,26 +149,43 @@ echo(str("Tiling: ", tiles_x, " x ", tiles_y, " tiles (", cells_per_tile_x, "x",
 // ============================================================================
 
 module pocket() {
-    // Standard Gridfinity bottom chamfer
-    hull() {
-        translate([0, 0, 0])
-            rounded_centered_rect(POCKET_BOT, POCKET_BOT, 0.01, r=1.05);
+    if (style == 0) {
+        // Style 0: Flat-walled pocket with stacking lip recess
+        // This creates uniform wall thickness and the stepped underside flange.
+        
+        // Main through-cut: uniform 41.5mm opening from lip_depth to top
         translate([0, 0, CHAMFER_BOT_H])
-            rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
-    }
-    
-    translate([0, 0, CHAMFER_BOT_H])
-        rounded_centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H, r=1.85);
-    
-    hull() {
-        translate([0, 0, CHAMFER_BOT_H + WALL_VERT_H])
-            rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
+            rounded_centered_rect(POCKET_TOP, POCKET_TOP, PROFILE_H - CHAMFER_BOT_H + 1, r=4);
+        
+        // Stacking lip: chamfered recess at the very bottom
+        hull() {
+            translate([0, 0, -0.01])
+                rounded_centered_rect(POCKET_TOP + 2 * CHAMFER_BOT_H, POCKET_TOP + 2 * CHAMFER_BOT_H, 0.01, r=4 + CHAMFER_BOT_H);
+            translate([0, 0, CHAMFER_BOT_H])
+                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01, r=4);
+        }
+    } else {
+        // Standard Gridfinity 3-layer pocket profile
+        hull() {
+            translate([0, 0, 0])
+                rounded_centered_rect(POCKET_BOT, POCKET_BOT, 0.01, r=1.05);
+            translate([0, 0, CHAMFER_BOT_H])
+                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
+        }
+        
+        translate([0, 0, CHAMFER_BOT_H])
+            rounded_centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H, r=1.85);
+        
+        hull() {
+            translate([0, 0, CHAMFER_BOT_H + WALL_VERT_H])
+                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
+            translate([0, 0, PROFILE_H])
+                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01, r=4);
+        }
+        
         translate([0, 0, PROFILE_H])
-            rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01, r=4);
+            rounded_centered_rect(POCKET_TOP, POCKET_TOP, 1, r=4);
     }
-    
-    translate([0, 0, PROFILE_H])
-        rounded_centered_rect(POCKET_TOP, POCKET_TOP, 1, r=4);
 }
 
 // Helper: rounded centered rectangle (matching standard 4mm Gridfinity corner radius at top opening)
