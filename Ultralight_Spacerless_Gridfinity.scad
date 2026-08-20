@@ -213,6 +213,7 @@ module solid_base() {
 }
 
 module custom_ring(w, d, h) {
+    ext_wall = GRID_PITCH - POCKET_TOP; // 0.5mm — matches grid cell wall thickness
     if (w >= 0.1 && d >= 0.1) {
         difference() {
             // Outer shape (solid boundary). For standard Gridfinity styling with uniform walls
@@ -221,9 +222,10 @@ module custom_ring(w, d, h) {
             
             // Inner void (ONLY hollow out if it's an extension, i.e., smaller than a full cell)
             // Standard cells will be hollowed out by the 3D pocket() chamfers.
-            if ((w < GRID_PITCH - 0.1 || d < GRID_PITCH - 0.1) && w > 4.8 && d > 4.8) {
+            // Uses same wall thickness as grid cells for a consistent thin-wall look.
+            if ((w < GRID_PITCH - 0.1 || d < GRID_PITCH - 0.1) && w > ext_wall + 0.1 && d > ext_wall + 0.1) {
                 translate([0, 0, -1])
-                    rounded_centered_rect(w - 4.8, d - 4.8, h + 2, r=min(1.85, (w - 4.8)/2, (d - 4.8)/2));
+                    rounded_centered_rect(w - ext_wall, d - ext_wall, h + 2, r=min(4, (w - ext_wall)/2, (d - ext_wall)/2));
             }
         }
     }
