@@ -240,21 +240,56 @@ module skeleton_base() {
         // Extensions are drawn using custom-sized hollow rings to match the style.
         h = PROFILE_H; // Use full height to allow 3D chamfers
         
-        for (ix = [-1 : gx]) {
-            for (iy = [-1 : gy]) {
-                // Determine width and center X for this cell/extension
-                w = (ix == -1) ? ext_L : ((ix == gx) ? ext_R : GRID_PITCH);
-                x = (ix == -1) ? (ext_L / 2) : ((ix == gx) ? (ext_L + gx * GRID_PITCH + ext_R / 2) : (ext_L + ix * GRID_PITCH + GRID_PITCH / 2));
-                
-                // Determine depth and center Y for this cell/extension
-                d = (iy == -1) ? ext_F : ((iy == gy) ? ext_B : GRID_PITCH);
-                y = (iy == -1) ? (ext_F / 2) : ((iy == gy) ? (ext_F + gy * GRID_PITCH + ext_B / 2) : (ext_F + iy * GRID_PITCH + GRID_PITCH / 2));
-                
-                if (w > 0.01 && d > 0.01) {
-                    translate([x, y, 0])
-                        custom_ring(w, d, h);
-                }
+        // 1. Grid Cells
+        for (ix = [0 : gx - 1]) {
+            for (iy = [0 : gy - 1]) {
+                w = GRID_PITCH;
+                d = GRID_PITCH;
+                x = ext_L + ix * GRID_PITCH + GRID_PITCH / 2;
+                y = ext_F + iy * GRID_PITCH + GRID_PITCH / 2;
+                translate([x, y, 0])
+                    custom_ring(w, d, h);
             }
+        }
+        
+        // 2. Left Extension (continuous bar)
+        if (ext_L > 0) {
+            w = ext_L;
+            d = gy * GRID_PITCH;
+            x = ext_L / 2;
+            y = ext_F + d / 2;
+            translate([x, y, 0])
+                custom_ring(w, d, h);
+        }
+        
+        // 3. Right Extension (continuous bar)
+        if (ext_R > 0) {
+            w = ext_R;
+            d = gy * GRID_PITCH;
+            x = ext_L + gx * GRID_PITCH + ext_R / 2;
+            y = ext_F + d / 2;
+            translate([x, y, 0])
+                custom_ring(w, d, h);
+        }
+        
+        // 4. Front (Bottom) Extension (continuous bar)
+        if (ext_F > 0) {
+            w = gx * GRID_PITCH;
+            d = ext_F;
+            x = ext_L + w / 2;
+            y = ext_F / 2;
+            translate([x, y, 0])
+                custom_ring(w, d, h);
+        }
+        
+        // 5. Back (Top) Extension (continuous bar)
+        if (ext_B > 0) {
+            w = gx * GRID_PITCH;
+            d = ext_B;
+            x = ext_L + w / 2;
+            y = ext_F + gy * GRID_PITCH + ext_B / 2;
+            translate([x, y, 0])
+                custom_ring(w, d, h);
         }
     } else {
         wt = WALL_MIN;
