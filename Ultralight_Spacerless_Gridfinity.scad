@@ -149,12 +149,18 @@ echo(str("Tiling: ", tiles_x, " x ", tiles_y, " tiles (", cells_per_tile_x, "x",
 // ============================================================================
 
 module pocket() {
-    // Standard Gridfinity profile
-    hull() {
-        translate([0, 0, 0])
-            rounded_centered_rect(POCKET_BOT, POCKET_BOT, 0.01, r=1.05);
-        translate([0, 0, CHAMFER_BOT_H])
-            rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
+    if (style == 0) {
+        // Dual-level underside flange / stepped inner recess
+        translate([0, 0, -0.01])
+            rounded_centered_rect(POCKET_TOP, POCKET_TOP, CHAMFER_BOT_H + 0.01, r=4);
+    } else {
+        // Standard Gridfinity bottom chamfer
+        hull() {
+            translate([0, 0, 0])
+                rounded_centered_rect(POCKET_BOT, POCKET_BOT, 0.01, r=1.05);
+            translate([0, 0, CHAMFER_BOT_H])
+                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
+        }
     }
     
     translate([0, 0, CHAMFER_BOT_H])
