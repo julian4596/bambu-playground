@@ -150,38 +150,49 @@ echo(str("Tiling: ", tiles_x, " x ", tiles_y, " tiles (", cells_per_tile_x, "x",
 
 module pocket() {
     if (style == 0) {
-        // Super Light profile: perfectly smooth uniform walls.
-        // The base is 1.8mm tall (sits flat). We just subtract a straight rounded 37.2mm hole.
-        translate([0, 0, -1])
-            rounded_centered_rect(POCKET_MID, POCKET_MID, PROFILE_H + 2);
+        // Style 0: Flat-walled pocket with stacking lip recess
+        // This creates uniform wall thickness and the stepped underside flange.
+        
+        // Main through-cut: uniform 41.5mm opening from lip_depth to top
+        translate([0, 0, CHAMFER_BOT_H])
+            rounded_centered_rect(POCKET_TOP, POCKET_TOP, PROFILE_H - CHAMFER_BOT_H + 1, r=4);
+        
+        // Stacking lip: chamfered recess at the very bottom
+        hull() {
+            translate([0, 0, -0.01])
+                rounded_centered_rect(POCKET_TOP + 2 * CHAMFER_BOT_H, POCKET_TOP + 2 * CHAMFER_BOT_H, 0.01, r=4 + CHAMFER_BOT_H);
+            translate([0, 0, CHAMFER_BOT_H])
+                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01, r=4);
+        }
     } else {
-        // Standard Gridfinity profile
+        // Standard Gridfinity 3-layer pocket profile
         hull() {
             translate([0, 0, 0])
-                rounded_centered_rect(POCKET_BOT, POCKET_BOT, 0.01);
+                rounded_centered_rect(POCKET_BOT, POCKET_BOT, 0.01, r=1.05);
             translate([0, 0, CHAMFER_BOT_H])
-                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01);
+                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
         }
         
         translate([0, 0, CHAMFER_BOT_H])
-            rounded_centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H);
+            rounded_centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H, r=1.85);
         
         hull() {
             translate([0, 0, CHAMFER_BOT_H + WALL_VERT_H])
-                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01);
+                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
             translate([0, 0, PROFILE_H])
-                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01);
+                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01, r=4);
         }
         
         translate([0, 0, PROFILE_H])
-            rounded_centered_rect(POCKET_TOP, POCKET_TOP, 1);
+            rounded_centered_rect(POCKET_TOP, POCKET_TOP, 1, r=4);
     }
 }
 
-// Helper: rounded centered rectangle (matching standard 4mm Gridfinity corner radius)
-module rounded_centered_rect(w, d, h, r=4) {
-    // If the dimension is somehow smaller than the radius, cap the radius
-    eff_r = min(r, w/2, d/2);
+// Helper: rounded centered rectangle (matching standard 4mm Gridfinity corner radius at top opening)
+module rounded_centered_rect(w, d, h, r=-1) {
+    // If r is not provided (-1), calculate the correct corner radius based on Gridfinity standard
+    base_r = (r == -1) ? max(0.1, 4 - (POCKET_TOP - w)/2) : r;
+    eff_r = min(base_r, w/2, d/2);
     hull() {
         for (x = [-w/2 + eff_r, w/2 - eff_r]) {
             for (y = [-d/2 + eff_r, d/2 - eff_r]) {
@@ -202,15 +213,19 @@ module solid_base() {
 }
 
 module custom_ring(w, d, h) {
+    ext_wall = GRID_PITCH - POCKET_TOP; // 0.5mm — matches grid cell wall thickness
     if (w >= 0.1 && d >= 0.1) {
         difference() {
-            // Outer shape
-            rounded_centered_rect(w, d, h, r=min(6.4, w/2, d/2));
+            // Outer shape (solid boundary). For standard Gridfinity styling with uniform walls
+            // and mathematically perfect chamfered diamond holes, outer radius is 4.25.
+            rounded_centered_rect(w, d, h, r=min(4.25, w/2, d/2));
             
-            // Inner void (only if there's enough space for 2.4mm walls on all sides)
-            if (w > 4.8 && d > 4.8) {
+            // Inner void (ONLY hollow out if it's an extension, i.e., smaller than a full cell)
+            // Standard cells will be hollowed out by the 3D pocket() chamfers.
+            // Uses same wall thickness as grid cells for a consistent thin-wall look.
+            if ((w < GRID_PITCH - 0.1 || d < GRID_PITCH - 0.1) && w > ext_wall + 0.1 && d > ext_wall + 0.1) {
                 translate([0, 0, -1])
-                    rounded_centered_rect(w - 4.8, d - 4.8, h + 2, r=min(4, (w - 4.8)/2, (d - 4.8)/2));
+                    rounded_centered_rect(w - ext_wall, d - ext_wall, h + 2, r=min(4, (w - ext_wall)/2, (d - ext_wall)/2));
             }
         }
     }
@@ -223,23 +238,58 @@ module skeleton_base() {
         // on the straights (forming 4.8mm walls) and pull away at the corners
         // (forming diamond holes). The outer boundary naturally has r=6.4 corners.
         // Extensions are drawn using custom-sized hollow rings to match the style.
-        h = WALL_VERT_H; // 1.8mm height for max weight savings
+        h = PROFILE_H; // Use full height to allow 3D chamfers
         
-        for (ix = [-1 : gx]) {
-            for (iy = [-1 : gy]) {
-                // Determine width and center X for this cell/extension
-                w = (ix == -1) ? ext_L : ((ix == gx) ? ext_R : GRID_PITCH);
-                x = (ix == -1) ? (ext_L / 2) : ((ix == gx) ? (ext_L + gx * GRID_PITCH + ext_R / 2) : (ext_L + ix * GRID_PITCH + GRID_PITCH / 2));
-                
-                // Determine depth and center Y for this cell/extension
-                d = (iy == -1) ? ext_F : ((iy == gy) ? ext_B : GRID_PITCH);
-                y = (iy == -1) ? (ext_F / 2) : ((iy == gy) ? (ext_F + gy * GRID_PITCH + ext_B / 2) : (ext_F + iy * GRID_PITCH + GRID_PITCH / 2));
-                
-                if (w > 0.01 && d > 0.01) {
-                    translate([x, y, 0])
-                        custom_ring(w, d, h);
-                }
+        // 1. Grid Cells
+        for (ix = [0 : gx - 1]) {
+            for (iy = [0 : gy - 1]) {
+                w = GRID_PITCH;
+                d = GRID_PITCH;
+                x = ext_L + ix * GRID_PITCH + GRID_PITCH / 2;
+                y = ext_F + iy * GRID_PITCH + GRID_PITCH / 2;
+                translate([x, y, 0])
+                    custom_ring(w, d, h);
             }
+        }
+        
+        // 2. Left Extension (continuous bar)
+        if (ext_L > 0) {
+            w = ext_L;
+            d = gy * GRID_PITCH;
+            x = ext_L / 2;
+            y = ext_F + d / 2;
+            translate([x, y, 0])
+                custom_ring(w, d, h);
+        }
+        
+        // 3. Right Extension (continuous bar)
+        if (ext_R > 0) {
+            w = ext_R;
+            d = gy * GRID_PITCH;
+            x = ext_L + gx * GRID_PITCH + ext_R / 2;
+            y = ext_F + d / 2;
+            translate([x, y, 0])
+                custom_ring(w, d, h);
+        }
+        
+        // 4. Front (Bottom) Extension (continuous bar)
+        if (ext_F > 0) {
+            w = gx * GRID_PITCH;
+            d = ext_F;
+            x = ext_L + w / 2;
+            y = ext_F / 2;
+            translate([x, y, 0])
+                custom_ring(w, d, h);
+        }
+        
+        // 5. Back (Top) Extension (continuous bar)
+        if (ext_B > 0) {
+            w = gx * GRID_PITCH;
+            d = ext_B;
+            x = ext_L + w / 2;
+            y = ext_F + gy * GRID_PITCH + ext_B / 2;
+            translate([x, y, 0])
+                custom_ring(w, d, h);
         }
     } else {
         wt = WALL_MIN;
@@ -373,15 +423,13 @@ module ultralight_spacerless_baseplate() {
         else
             solid_full_base();
         
-        // Subtract pockets for every grid cell (only for non-ring styles)
-        if (style != 0) {
-            for (cx = [0:gx-1]) {
-                for (cy = [0:gy-1]) {
-                    x = ext_L + cx * GRID_PITCH + GRID_PITCH / 2;
-                    y = ext_F + cy * GRID_PITCH + GRID_PITCH / 2;
-                    translate([x, y, -0.01])
-                        pocket();
-                }
+        // Subtract pockets for every grid cell (for ALL styles, including style 0)
+        for (cx = [0:gx-1]) {
+            for (cy = [0:gy-1]) {
+                x = ext_L + cx * GRID_PITCH + GRID_PITCH / 2;
+                y = ext_F + cy * GRID_PITCH + GRID_PITCH / 2;
+                translate([x, y, -0.01])
+                    pocket();
             }
         }
         
