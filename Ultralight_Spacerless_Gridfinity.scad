@@ -149,22 +149,12 @@ echo(str("Tiling: ", tiles_x, " x ", tiles_y, " tiles (", cells_per_tile_x, "x",
 // ============================================================================
 
 module pocket() {
-    if (style == 0) {
-        // Dual-level underside flange with sweeping chamfer (uncapped)
-        hull() {
-            translate([0, 0, -0.01])
-                rounded_centered_rect(POCKET_TOP + 2 * CHAMFER_BOT_H, POCKET_TOP + 2 * CHAMFER_BOT_H, 0.01, r=4 + CHAMFER_BOT_H);
-            translate([0, 0, CHAMFER_BOT_H])
-                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01, r=4);
-        }
-    } else {
-        // Standard Gridfinity bottom chamfer
-        hull() {
-            translate([0, 0, 0])
-                rounded_centered_rect(POCKET_BOT, POCKET_BOT, 0.01, r=1.05);
-            translate([0, 0, CHAMFER_BOT_H])
-                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
-        }
+    // Standard Gridfinity bottom chamfer
+    hull() {
+        translate([0, 0, 0])
+            rounded_centered_rect(POCKET_BOT, POCKET_BOT, 0.01, r=1.05);
+        translate([0, 0, CHAMFER_BOT_H])
+            rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
     }
     
     translate([0, 0, CHAMFER_BOT_H])
@@ -208,8 +198,9 @@ module solid_base() {
 module custom_ring(w, d, h) {
     if (w >= 0.1 && d >= 0.1) {
         difference() {
-            // Outer shape (solid boundary)
-            rounded_centered_rect(w, d, h, r=min(6.4, w/2, d/2));
+            // Outer shape (solid boundary). For standard Gridfinity styling with uniform walls
+            // and mathematically perfect chamfered diamond holes, outer radius is 4.25.
+            rounded_centered_rect(w, d, h, r=min(4.25, w/2, d/2));
             
             // Inner void (ONLY hollow out if it's an extension, i.e., smaller than a full cell)
             // Standard cells will be hollowed out by the 3D pocket() chamfers.
