@@ -2,45 +2,35 @@
 // Ultralight Spacerless Gridfinity Baseplate
 // ============================================================================
 // A parametric, MakerWorld-compatible OpenSCAD script that generates
-// ultra-lightweight Gridfinity baseplates that auto-fit your drawer
-// dimensions with zero wasted space.
+// ultra-lightweight Gridfinity baseplates strictly adhering to the official
+// Gridfinity specification (https://gridfinity.xyz/specification/) and
+// inspired by Paul Bone's gfthings (https://github.com/PaulBone/gfthings).
 //
 // Features:
-//   - Spacerless auto-fit: input drawer dimensions, get a perfect fit
-//   - Three styles: Ultralight (skeleton), Standard (thin floor), Solid
-//   - Optional magnet and screw holes
+//   - Strictly compliant with Gridfinity v5 standards
+//   - Three styles:
+//       0 = Ultralight Skeleton (open floor with 0.7mm chamfered bottom ledge)
+//       1 = Standard (0.4mm floor)
+//       2 = Solid (1.2mm floor)
+//   - Optional arched doorways or trapezoidal edge cutouts along divider walls
+//   - Standard 4-corner magnet and screw holes per cell (26mm square spacing)
+//   - Spacerless auto-fit to drawer dimensions with zero wasted space
+//   - Built-in bed tiling, puzzle dovetail joints, and coordinate labels
 //   - MakerWorld Customizer compatible
 //
 // Author: Julian (generated with AI assistance)
 // License: CC BY-SA 4.0
 // ============================================================================
 
-// ---- Gridfinity Standard Constants ----
-// These define the Gridfinity standard. Do not change unless you
-// understand the Gridfinity specification.
-GRID_PITCH     = 42;      // mm - standard grid unit size
-TOLERANCE      = 0.25;    // mm - clearance per side (bin-to-baseplate)
-WALL_MIN       = 1.2;     // mm - minimum wall thickness (3 × 0.4mm)
-MAGNET_D       = 6.0;     // mm - magnet hole diameter
-MAGNET_H       = 2.4;     // mm - magnet hole depth
-SCREW_D        = 3.2;     // mm - M3 screw hole diameter
+include <gridfinity_core.scad>
 
-// Gridfinity baseplate pocket profile (cross-section, bottom to top):
-//   Layer 1: 45° chamfer inward  — 0.8mm tall, narrows 0.8mm per side
-//   Layer 2: Vertical wall       — 1.8mm tall, straight
-//   Layer 3: 45° chamfer outward — 2.15mm tall, widens 2.15mm per side
-CHAMFER_BOT_H = 0.8;
-WALL_VERT_H   = 1.8;
-CHAMFER_TOP_H = 2.15;
-PROFILE_H     = CHAMFER_BOT_H + WALL_VERT_H + CHAMFER_TOP_H; // ≈ 4.75mm
-
-// Pocket dimensions (the void bins sit in)
-// At the TOP of the pocket, the opening is the full cell minus tolerance
-POCKET_TOP = GRID_PITCH - 2 * TOLERANCE;  // 41.5mm
-// The mid-section (after top chamfer, before bottom chamfer)
-POCKET_MID = POCKET_TOP - 2 * CHAMFER_TOP_H;  // 37.2mm
-// At the BOTTOM, it narrows further
-POCKET_BOT = POCKET_MID - 2 * CHAMFER_BOT_H;  // 35.6mm
+// ---- Gridfinity Standard Constants (Inherited from gridfinity_core.scad) ----
+GRID_PITCH     = GF_PITCH;          // 42.0 mm standard cell pitch
+TOLERANCE      = GF_TOLERANCE;      // 0.25 mm clearance per side
+PROFILE_H      = GF_PROFILE_H;      // 4.65 mm official socket profile depth
+POCKET_TOP     = GF_SOCKET_TOP_W;   // 42.0 mm socket top opening
+POCKET_MID     = GF_SOCKET_WAIST_W; // 37.7 mm socket vertical waist
+POCKET_BOT     = GF_SOCKET_BOT_W;   // 36.3 mm socket bottom opening
 
 // ============================================================================
 // MakerWorld Customizer Parameters
@@ -62,10 +52,14 @@ manual_grid_x = 4; // [1:1:20]
 // Manual grid units in Y (only used if auto-fit is OFF)
 manual_grid_y = 4; // [1:1:20]
 
-/* [03 — Baseplate Style & Wall Thickness] */
-// 0=Super Light (Skeleton), 1=Standard (0.4mm floor), 2=Solid (1.2mm floor)
-style = 0; // [0:Super Light, 1:Standard, 2:Solid]
-// Thickness of divider walls between bins in mm (2.4mm = 6 solid perimeters)
+/* [03 — Baseplate Style & Bottom Support] */
+// 0=Ultralight Skeleton, 1=Standard (0.4mm floor), 2=Solid (1.2mm floor)
+style = 0; // [0:Ultralight Skeleton, 1:Standard, 2:Solid]
+// In Ultralight mode: keep 0.7mm chamfer ledge to support bin foot
+chamfer_bottom_ledge = true;
+// Wall cutout mode: 0=Continuous walls, 1=Arched doorways, 2=Trapezoid edge cuts
+wall_cutout_mode = 0; // [0:Continuous, 1:Arched Doorways, 2:Edge Cuts]
+// Thickness of divider walls between bins in mm (for custom ring spacing)
 divider_wall_thickness = 2.4; // [1.2:0.2:4.8]
 
 /* [04 — Extension Distribution] */
@@ -73,11 +67,13 @@ divider_wall_thickness = 2.4; // [1.2:0.2:4.8]
 // 0=Split evenly both sides, 1=Right/Back only, 2=Left/Front only
 extension_mode = 0; // [0:Even Split, 1:Right-Back Only, 2:Left-Front Only]
 
-/* [05 — Options] */
-// Add 6mm x 2.4mm magnet holes at grid intersections
-magnet_holes = false;
-// Add M3 screw holes at grid intersections
-screw_holes = false;
+/* [05 — Magnet & Screw Holes] */
+// Number of corner holes per cell: 0=None, 2=Two opposite corners, 4=All 4 corners
+corner_holes_per_cell = 0; // [0:None, 2:Two Corners, 4:Four Corners]
+// Magnet hole diameter in mm (6.2mm press fit for 6mm magnets)
+magnet_diameter = 6.2; // [6.0:0.1:6.5]
+// M3 screw clearance hole diameter in mm
+screw_diameter = 3.2; // [2.5:0.1:4.0]
 
 /* [06 — Print Bed Tiling] */
 // Splitcut the generated plate (manual or auto-fit) into bed-sized tiles.
@@ -96,19 +92,27 @@ enable_labels = true;
 part_to_render = 0; // [0:All (Exploded), 1:Tile 1/1, 2:Tile 2/1, 3:Tile 1/2, 4:Tile 2/2, 5:Tile 3/1, 6:Tile 3/2, 7:Tile 3/3, 8:Tile 4/1, 9:Tile 4/2, 10:Tile 4/3]
 
 /* [Hidden] */
-$fn = 40;
+$fn = 32;
 
-// Dynamic pocket profile based on wall thickness
+// Allow override from parent scripts
+_act_use_auto_fit = is_undef(_override_use_auto_fit) ? use_auto_fit : _override_use_auto_fit;
+_act_grid_x       = is_undef(_override_manual_grid_x) ? manual_grid_x : _override_manual_grid_x;
+_act_grid_y       = is_undef(_override_manual_grid_y) ? manual_grid_y : _override_manual_grid_y;
+_act_style        = is_undef(_override_style) ? style : _override_style;
+_act_clearance    = is_undef(_override_clearance) ? clearance_per_side : _override_clearance;
+_act_tiling       = is_undef(_override_tiling_mode) ? tiling_mode : _override_tiling_mode;
+_act_ledge        = is_undef(_override_chamfer_ledge) ? chamfer_bottom_ledge : _override_chamfer_ledge;
+_act_holes        = is_undef(_override_corner_holes) ? corner_holes_per_cell : _override_corner_holes;
+_act_wall_mode    = is_undef(_override_wall_cutout_mode) ? wall_cutout_mode : _override_wall_cutout_mode;
+
 _safe_wall = max(0.8, min(divider_wall_thickness, 4.8));
-POCKET_WALL_MID = GRID_PITCH - _safe_wall; // e.g. 42 - 2.4 = 39.6mm
-CHAMFER_H = max(0.1, (POCKET_TOP - POCKET_WALL_MID) / 2); // 45-degree slope height
 
 // ============================================================================
 // Auto-Fit Calculation
 // ============================================================================
 
-_usable_w = drawer_width_mm - 2 * clearance_per_side;
-_usable_d = drawer_depth_mm - 2 * clearance_per_side;
+_usable_w = drawer_width_mm - 2 * _act_clearance;
+_usable_d = drawer_depth_mm - 2 * _act_clearance;
 
 _auto_gx = max(1, floor(_usable_w / GRID_PITCH));
 _auto_gy = max(1, floor(_usable_d / GRID_PITCH));
@@ -116,11 +120,11 @@ _auto_gy = max(1, floor(_usable_d / GRID_PITCH));
 _left_x = _usable_w - _auto_gx * GRID_PITCH;
 _left_y = _usable_d - _auto_gy * GRID_PITCH;
 
-gx = use_auto_fit ? _auto_gx : manual_grid_x;
-gy = use_auto_fit ? _auto_gy : manual_grid_y;
+gx = _act_use_auto_fit ? _auto_gx : _act_grid_x;
+gy = _act_use_auto_fit ? _auto_gy : _act_grid_y;
 
-ext_tx = use_auto_fit ? max(0, _left_x) : 0;
-ext_ty = use_auto_fit ? max(0, _left_y) : 0;
+ext_tx = _act_use_auto_fit ? max(0, _left_x) : 0;
+ext_ty = _act_use_auto_fit ? max(0, _left_y) : 0;
 
 // Extension distribution
 ext_L = (extension_mode == 0) ? floor(ext_tx / 2) :
@@ -136,155 +140,91 @@ total_w = gx * GRID_PITCH + ext_L + ext_R;
 total_d = gy * GRID_PITCH + ext_F + ext_B;
 
 // Tiling calculations
-// We reserve margin for the physical bed edge + ~15mm for puzzle joints & frame extensions
-cells_per_tile_x = tiling_mode ? max(1, floor((bed_x_mm - 2 * bed_safe_margin_mm - 15) / GRID_PITCH)) : gx;
-cells_per_tile_y = tiling_mode ? max(1, floor((bed_y_mm - 2 * bed_safe_margin_mm - 15) / GRID_PITCH)) : gy;
+cells_per_tile_x = _act_tiling ? max(1, floor((bed_x_mm - 2 * bed_safe_margin_mm - 15) / GRID_PITCH)) : gx;
+cells_per_tile_y = _act_tiling ? max(1, floor((bed_y_mm - 2 * bed_safe_margin_mm - 15) / GRID_PITCH)) : gy;
 
-tiles_x = tiling_mode ? ceil(gx / cells_per_tile_x) : 1;
-tiles_y = tiling_mode ? ceil(gy / cells_per_tile_y) : 1;
+tiles_x = _act_tiling ? ceil(gx / cells_per_tile_x) : 1;
+tiles_y = _act_tiling ? ceil(gy / cells_per_tile_y) : 1;
 
 // Debug output
-echo(str("=== Ultralight Spacerless Gridfinity ==="));
-echo(str("Grid: ", gx, " x ", gy));
-echo(str("Extensions — L:", ext_L, " R:", ext_R, " F:", ext_F, " B:", ext_B, " mm"));
-echo(str("Total: ", total_w, " x ", total_d, " mm"));
-echo(str("Style: ", style == 0 ? "Ultralight" : style == 1 ? "Standard" : "Solid"));
-echo(str("Divider Wall Thickness: ", _safe_wall, " mm (Pocket Mid: ", POCKET_WALL_MID, " mm, Chamfer H: ", CHAMFER_H, " mm)"));
-echo(str("Tiling: ", tiles_x, " x ", tiles_y, " tiles (", cells_per_tile_x, "x", cells_per_tile_y, " max cells per tile)"));
+echo(str("=== Official Spec Gridfinity Baseplate ==="));
+echo(str("Grid: ", gx, " x ", gy, " cells"));
+echo(str("Dimensions: ", total_w, " x ", total_d, " mm (Extensions — L:", ext_L, " R:", ext_R, " F:", ext_F, " B:", ext_B, " mm)"));
+echo(str("Style: ", _act_style == 0 ? "Ultralight Skeleton" : _act_style == 1 ? "Standard (0.4mm floor)" : "Solid (1.2mm floor)"));
+echo(str("Socket Dimensions — Mouth: ", POCKET_TOP, " mm, Waist: ", POCKET_MID, " mm, Bottom Ledge: ", POCKET_BOT, " mm"));
+echo(str("Corner Holes per Cell: ", _act_holes, " (26mm spacing)"));
 
 // ============================================================================
 // Modules — Profile Geometry
 // ============================================================================
 
 module pocket() {
-    if (style == 0) {
-        // Funnel top chamfer: 45° from POCKET_WALL_MID up to POCKET_TOP
-        hull() {
-            translate([0, 0, PROFILE_H - CHAMFER_H])
-                rounded_centered_rect(POCKET_WALL_MID, POCKET_WALL_MID, 0.01, r=max(0.5, 4 - CHAMFER_H));
-            translate([0, 0, PROFILE_H])
-                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01, r=4);
-        }
-        // Extend above top for clean difference cut
-        translate([0, 0, PROFILE_H])
-            rounded_centered_rect(POCKET_TOP, POCKET_TOP, 1, r=4);
-
-        // Through-cut body down to bed
-        translate([0, 0, -1])
-            rounded_centered_rect(POCKET_WALL_MID, POCKET_WALL_MID, PROFILE_H - CHAMFER_H + 1.01, r=max(0.5, 4 - CHAMFER_H));
-    } else {
-        // Standard Gridfinity 3-layer pocket profile for Styles 1 & 2
-        hull() {
-            translate([0, 0, 0])
-                rounded_centered_rect(POCKET_BOT, POCKET_BOT, 0.01, r=1.05);
-            translate([0, 0, CHAMFER_BOT_H])
-                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
-        }
-        translate([0, 0, CHAMFER_BOT_H])
-            rounded_centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H, r=1.85);
-        hull() {
-            translate([0, 0, CHAMFER_BOT_H + WALL_VERT_H])
-                rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
-            translate([0, 0, PROFILE_H])
-                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01, r=4);
-        }
-        translate([0, 0, PROFILE_H])
-            rounded_centered_rect(POCKET_TOP, POCKET_TOP, 1, r=4);
-    }
-}
-
-// Helper: rounded centered rectangle (matching standard 4mm Gridfinity corner radius)
-module rounded_centered_rect(w, d, h, r=4) {
-    // If the dimension is somehow smaller than the radius, cap the radius
-    eff_r = min(r, w/2, d/2);
-    hull() {
-        for (x = [-w/2 + eff_r, w/2 - eff_r]) {
-            for (y = [-d/2 + eff_r, d/2 - eff_r]) {
-                translate([x, y, 0])
-                    cylinder(r=eff_r, h=h);
-            }
-        }
-    }
+    gf_socket_pocket(open_bottom=(_act_style == 0), chamfer_ledge=_act_ledge);
 }
 
 // ============================================================================
 // Modules — Baseplate Structure
 // ============================================================================
 
-// Solid block covering the entire grid area at profile height
 module solid_base() {
     cube([total_w, total_d, PROFILE_H]);
 }
 
-module custom_ring(w, d, h) {
-    ext_wall = _safe_wall;
+module custom_cell_envelope(w, d, h) {
     if (w >= 0.1 && d >= 0.1) {
         difference() {
-            // Outer shape (solid boundary). Outer radius 4.25 produces concentric
-            // corner contours with standard Gridfinity pockets and diamond cutouts at intersections.
-            rounded_centered_rect(w, d, h, r=min(4.25, w/2, d/2));
+            // Concentric outer boundary (r=4.0mm) yielding diamond voids at intersections
+            gf_cell_envelope(w, d, h);
             
-            // Inner void (ONLY hollow out if it's an extension, i.e., smaller than a full cell).
-            // Standard cells will be hollowed out by pocket() with the 45° chamfer funnel.
-            if ((w < GRID_PITCH - 0.1 || d < GRID_PITCH - 0.1) && w > ext_wall + 0.1 && d > ext_wall + 0.1) {
+            // If this is a partial extension tile, hollow out inner area
+            if ((w < GRID_PITCH - 0.1 || d < GRID_PITCH - 0.1) && w > _safe_wall + 0.1 && d > _safe_wall + 0.1) {
                 translate([0, 0, -1])
-                    rounded_centered_rect(w - ext_wall, d - ext_wall, h + 2, r=min(max(0.5, 4 - CHAMFER_H), (w - ext_wall)/2, (d - ext_wall)/2));
+                    gf_rounded_rect(w - _safe_wall, d - _safe_wall, h + 2, r=min(GF_SOCKET_WAIST_R, (w - _safe_wall)/2, (d - _safe_wall)/2));
             }
         }
     }
 }
 
-// Ultralight skeleton: thin walls with thick intersection hubs
 module skeleton_base() {
-    if (style == 0) {
-        // "Lightest Baseplate" style: Use offset rings that perfectly merge
-        // on the straights (forming configurable divider_wall_thickness) and pull away at the corners
-        // (forming diamond holes). The outer boundary has r=4.25 corners concentric with pockets.
-        // Extensions are drawn using custom-sized hollow rings to match the style.
-        h = PROFILE_H; // Full profile height to allow 3D chamfers
-        
+    if (_act_style == 0) {
+        // Ultralight skeleton: envelope rings that merge on straights and form corner diamonds
         for (ix = [-1 : gx]) {
             for (iy = [-1 : gy]) {
-                // Determine width and center X for this cell/extension
                 w = (ix == -1) ? ext_L : ((ix == gx) ? ext_R : GRID_PITCH);
                 x = (ix == -1) ? (ext_L / 2) : ((ix == gx) ? (ext_L + gx * GRID_PITCH + ext_R / 2) : (ext_L + ix * GRID_PITCH + GRID_PITCH / 2));
                 
-                // Determine depth and center Y for this cell/extension
                 d = (iy == -1) ? ext_F : ((iy == gy) ? ext_B : GRID_PITCH);
                 y = (iy == -1) ? (ext_F / 2) : ((iy == gy) ? (ext_F + gy * GRID_PITCH + ext_B / 2) : (ext_F + iy * GRID_PITCH + GRID_PITCH / 2));
                 
                 if (w > 0.01 && d > 0.01) {
                     translate([x, y, 0])
-                        custom_ring(w, d, h);
+                        custom_cell_envelope(w, d, PROFILE_H);
                 }
             }
         }
     } else {
-        wt = WALL_MIN;
+        // Styles 1 & 2: Solid outer boundaries with solid ribs
+        wt = 1.2;
         h = PROFILE_H;
-        wt_cut = max(wt, 8); // Thicker wall for tile cut boundaries
+        wt_cut = max(wt, 8);
         
-        // Walls along Y (vertical lines of the grid)
         for (ix = [0:gx]) {
-            is_cut = tiling_mode && ix > 0 && ix < gx && (ix % cells_per_tile_x == 0);
+            is_cut = _act_tiling && ix > 0 && ix < gx && (ix % cells_per_tile_x == 0);
             cur_wt = is_cut ? wt_cut : wt;
-            
             x = ext_L + ix * GRID_PITCH;
             wx = max(0, min(x - cur_wt/2, total_w - cur_wt));
             translate([wx, 0, 0]) cube([cur_wt, total_d, h]);
         }
         
-        // Walls along X (horizontal lines of the grid)
         for (iy = [0:gy]) {
-            is_cut = tiling_mode && iy > 0 && iy < gy && (iy % cells_per_tile_y == 0);
+            is_cut = _act_tiling && iy > 0 && iy < gy && (iy % cells_per_tile_y == 0);
             cur_wt = is_cut ? wt_cut : wt;
-            
             y = ext_F + iy * GRID_PITCH;
             wy = max(0, min(y - cur_wt/2, total_d - cur_wt));
             translate([0, wy, 0]) cube([total_w, cur_wt, h]);
         }
         
-        // Reinforcement hubs at every intersection
+        // Hubs at intersections
         ps = wt * 2.5; 
         for (ix = [0:gx]) {
             for (iy = [0:gy]) {
@@ -295,36 +235,32 @@ module skeleton_base() {
                 translate([px, py, 0]) cube([ps, ps, h]);
             }
         }
-    
-    // Extension areas — lightweight perimeter + cross-brace ribs
-    // Left extension: perimeter wall + horizontal ribs
-    if (ext_L > 0.01) {
-        cube([wt, total_d, h]);
-        for (iy = [0:gy]) {
-            y = ext_F + iy * GRID_PITCH;
-            wy = max(0, min(y - wt/2, total_d - wt));
-            translate([0, wy, 0]) cube([ext_L, wt, h]);
+        
+        // Extensions
+        if (ext_L > 0.01) {
+            cube([wt, total_d, h]);
+            for (iy = [0:gy]) {
+                y = ext_F + iy * GRID_PITCH;
+                wy = max(0, min(y - wt/2, total_d - wt));
+                translate([0, wy, 0]) cube([ext_L, wt, h]);
+            }
         }
-    }
-    // Right extension
-    if (ext_R > 0.01) {
-        translate([total_w - wt, 0, 0]) cube([wt, total_d, h]);
-        for (iy = [0:gy]) {
-            y = ext_F + iy * GRID_PITCH;
-            wy = max(0, min(y - wt/2, total_d - wt));
-            translate([total_w - ext_R, wy, 0]) cube([ext_R, wt, h]);
+        if (ext_R > 0.01) {
+            translate([total_w - wt, 0, 0]) cube([wt, total_d, h]);
+            for (iy = [0:gy]) {
+                y = ext_F + iy * GRID_PITCH;
+                wy = max(0, min(y - wt/2, total_d - wt));
+                translate([total_w - ext_R, wy, 0]) cube([ext_R, wt, h]);
+            }
         }
-    }
-    // Front extension
-    if (ext_F > 0.01) {
-        cube([total_w, wt, h]);
-        for (ix = [0:gx]) {
-            x = ext_L + ix * GRID_PITCH;
-            wx = max(0, min(x - wt/2, total_w - wt));
-            translate([wx, 0, 0]) cube([wt, ext_F, h]);
+        if (ext_F > 0.01) {
+            cube([total_w, wt, h]);
+            for (ix = [0:gx]) {
+                x = ext_L + ix * GRID_PITCH;
+                wx = max(0, min(x - wt/2, total_w - wt));
+                translate([wx, 0, 0]) cube([wt, ext_F, h]);
+            }
         }
-    }
-        // Back extension
         if (ext_B > 0.01) {
             translate([0, total_d - wt, 0]) cube([total_w, wt, h]);
             for (ix = [0:gx]) {
@@ -336,42 +272,100 @@ module skeleton_base() {
     }
 }
 
-// Standard base: skeleton + thin floor
 module standard_base() {
     skeleton_base();
-    // Thin floor plate (0.4mm — single nozzle layer)
-    translate([0, 0, -0.4])
-        cube([total_w, total_d, 0.4]);
+    translate([0, 0, -0.4]) cube([total_w, total_d, 0.4]);
 }
 
-// Solid base with thick floor
 module solid_full_base() {
     solid_base();
-    // Thick floor plate (1.2mm — 3 layers)
-    translate([0, 0, -1.2])
-        cube([total_w, total_d, 1.2]);
+    translate([0, 0, -1.2]) cube([total_w, total_d, 1.2]);
+}
+
+// ============================================================================
+// Modules — Wall Cutouts (Arched Doorways / Edge Cuts)
+// ============================================================================
+
+module divider_cutouts() {
+    if (_act_wall_mode == 1) {
+        // Mode 1: Arched Doorways through divider walls
+        arch_w = 24.0;
+        arch_h = 3.5;
+        // X-divider walls (between cells along X)
+        if (gx > 1) {
+            for (cx = [1 : gx - 1]) {
+                for (cy = [0 : gy - 1]) {
+                    x = ext_L + cx * GRID_PITCH;
+                    y = ext_F + cy * GRID_PITCH + GRID_PITCH / 2;
+                    translate([x, y, 0])
+                        rotate([0, 0, 90])
+                            _doorway_arch(arch_w, arch_h, 6.0);
+                }
+            }
+        }
+        // Y-divider walls (between cells along Y)
+        if (gy > 1) {
+            for (cx = [0 : gx - 1]) {
+                for (cy = [1 : gy - 1]) {
+                    x = ext_L + cx * GRID_PITCH + GRID_PITCH / 2;
+                    y = ext_F + cy * GRID_PITCH;
+                    translate([x, y, 0])
+                        _doorway_arch(arch_w, arch_h, 6.0);
+                }
+            }
+        }
+    } else if (_act_wall_mode == 2) {
+        // Mode 2: Trapezoid Edge Cuts (gfthings style)
+        if (gx > 1) {
+            for (cx = [1 : gx - 1]) {
+                for (cy = [0 : gy - 1]) {
+                    x = ext_L + cx * GRID_PITCH;
+                    y = ext_F + cy * GRID_PITCH + GRID_PITCH / 2;
+                    translate([x, y, 0])
+                        rotate([0, 0, 90])
+                            gf_edge_cut(26.0, PROFILE_H);
+                }
+            }
+        }
+        if (gy > 1) {
+            for (cx = [0 : gx - 1]) {
+                for (cy = [1 : gy - 1]) {
+                    x = ext_L + cx * GRID_PITCH + GRID_PITCH / 2;
+                    y = ext_F + cy * GRID_PITCH;
+                    translate([x, y, 0])
+                        gf_edge_cut(26.0, PROFILE_H);
+                }
+            }
+        }
+    }
+}
+
+module _doorway_arch(w, h, depth) {
+    eff_r = min(4.0, w/2, h);
+    translate([0, 0, 0]) {
+        hull() {
+            translate([-w/2 + eff_r, -depth/2, h - eff_r])
+                rotate([-90, 0, 0]) cylinder(r=eff_r, h=depth);
+            translate([w/2 - eff_r, -depth/2, h - eff_r])
+                rotate([-90, 0, 0]) cylinder(r=eff_r, h=depth);
+            translate([-w/2, -depth/2, 0])
+                cube([w, depth, 0.01]);
+        }
+    }
 }
 
 // ============================================================================
 // Modules — Holes
 // ============================================================================
 
-// Place magnet/screw holes at all grid intersection points
 module all_holes() {
-    for (ix = [0:gx]) {
-        for (iy = [0:gy]) {
-            x = ext_L + ix * GRID_PITCH;
-            y = ext_F + iy * GRID_PITCH;
-            
-            if (magnet_holes) {
-                // Magnet hole from bottom
-                translate([x, y, -0.01])
-                    cylinder(d=MAGNET_D, h=MAGNET_H + 0.01, $fn=30);
-            }
-            if (screw_holes) {
-                // Screw hole all the way through
-                translate([x, y, -1.5])
-                    cylinder(d=SCREW_D, h=PROFILE_H + 3, $fn=20);
+    if (_act_holes > 0) {
+        for (cx = [0 : gx - 1]) {
+            for (cy = [0 : gy - 1]) {
+                x = ext_L + cx * GRID_PITCH + GRID_PITCH / 2;
+                y = ext_F + cy * GRID_PITCH + GRID_PITCH / 2;
+                translate([x, y, 0])
+                    gf_corner_holes(count=_act_holes, magnet_d=magnet_diameter, magnet_h=GF_MAGNET_H, screw_d=screw_diameter, h=PROFILE_H);
             }
         }
     }
@@ -383,27 +377,29 @@ module all_holes() {
 
 module ultralight_spacerless_baseplate() {
     difference() {
-        // Positive geometry (choose style)
-        if (style == 0)
+        // Positive geometry
+        if (_act_style == 0)
             skeleton_base();
-        else if (style == 1)
+        else if (_act_style == 1)
             standard_base();
         else
             solid_full_base();
         
-        // Subtract pockets for every grid cell (for ALL styles, including style 0)
-        for (cx = [0:gx-1]) {
-            for (cy = [0:gy-1]) {
+        // Subtract official pocket sockets for every grid cell
+        for (cx = [0 : gx - 1]) {
+            for (cy = [0 : gy - 1]) {
                 x = ext_L + cx * GRID_PITCH + GRID_PITCH / 2;
                 y = ext_F + cy * GRID_PITCH + GRID_PITCH / 2;
-                translate([x, y, -0.01])
+                translate([x, y, 0])
                     pocket();
             }
         }
         
-        // Subtract magnet/screw holes
-        if (magnet_holes || screw_holes)
-            all_holes();
+        // Subtract optional wall cutouts (arches or edge cuts)
+        divider_cutouts();
+        
+        // Subtract standard corner magnet/screw holes
+        all_holes();
     }
 }
 
@@ -412,7 +408,6 @@ module ultralight_spacerless_baseplate() {
 // ============================================================================
 
 module puzzle_tab(clearance=0) {
-    // Connects from X=0 to X=4, circle at X=4
     translate([4, 0, 0]) cylinder(d=8 + clearance, h=PROFILE_H+4, center=true);
     translate([2, 0, 0]) cube([4 + clearance, 4 + clearance, PROFILE_H+4], center=true);
 }
@@ -435,12 +430,10 @@ module tile_mask(tx, ty) {
     
     difference() {
         union() {
-            // Main bounding box for this tile
             translate([x_min, y_min, -2])
                 cube([w, d, PROFILE_H + 4]);
                 
-            if (style != 0) {
-                // Add tabs on the right edge (if not last tile)
+            if (_act_style != 0) {
                 if (tx < tiles_x - 1) {
                     for (cy = [start_cy : end_cy - 1]) {
                         y = ext_F + cy * GRID_PITCH + GRID_PITCH/2;
@@ -448,8 +441,6 @@ module tile_mask(tx, ty) {
                             puzzle_tab(0);
                     }
                 }
-                
-                // Add tabs on the top edge (if not last tile)
                 if (ty < tiles_y - 1) {
                     for (cx = [start_cx : end_cx - 1]) {
                         x = ext_L + cx * GRID_PITCH + GRID_PITCH/2;
@@ -460,22 +451,19 @@ module tile_mask(tx, ty) {
             }
         }
         
-        if (style != 0) {
-            // Subtract tabs on the left edge (if not first tile)
+        if (_act_style != 0) {
             if (tx > 0) {
                 for (cy = [start_cy : end_cy - 1]) {
                     y = ext_F + cy * GRID_PITCH + GRID_PITCH/2;
                     translate([x_min, y, PROFILE_H/2 - 1])
-                        puzzle_tab(0.2); // 0.2mm clearance for easy fit
+                        puzzle_tab(0.2);
                 }
             }
-            
-            // Subtract tabs on the bottom edge (if not first tile)
             if (ty > 0) {
                 for (cx = [start_cx : end_cx - 1]) {
                     x = ext_L + cx * GRID_PITCH + GRID_PITCH/2;
                     translate([x, y_min, PROFILE_H/2 - 1])
-                        rotate([0, 0, 90]) puzzle_tab(0.2); // 0.2mm clearance
+                        rotate([0, 0, 90]) puzzle_tab(0.2);
                 }
             }
         }
@@ -490,9 +478,7 @@ module tile_label(tx, ty) {
     
     translate([x, y, 0]) {
         difference() {
-            // Thin floor
             translate([0, 0, 0.4]) cube([POCKET_BOT, POCKET_BOT, 0.8], center=true);
-            // Cut text through it
             translate([0, 0, -1]) linear_extrude(3)
                 text(str(tx+1, "/", ty+1), size=8, halign="center", valign="center");
         }
@@ -503,21 +489,17 @@ module tile_label(tx, ty) {
 // Render
 // ============================================================================
 
-if (!tiling_mode) {
+if (!_act_tiling) {
     ultralight_spacerless_baseplate();
 } else {
-    // Exploded View or specific tile
     for (tx = [0 : tiles_x - 1]) {
         for (ty = [0 : tiles_y - 1]) {
             tile_index = 1 + tx + ty * tiles_x;
             
             if (part_to_render == 0 || part_to_render == tile_index) {
-                
-                // Explode translation
                 offset_x = (part_to_render == 0) ? tx * tile_gap_mm : 0;
                 offset_y = (part_to_render == 0) ? ty * tile_gap_mm : 0;
                 
-                // Center specific tile for export, or center entire exploded assembly
                 center_x = (part_to_render > 0) ? -(ext_L + tx * cells_per_tile_x * GRID_PITCH + (cells_per_tile_x * GRID_PITCH)/2) : -(total_w + (tiles_x-1)*tile_gap_mm)/2;
                 center_y = (part_to_render > 0) ? -(ext_F + ty * cells_per_tile_y * GRID_PITCH + (cells_per_tile_y * GRID_PITCH)/2) : -(total_d + (tiles_y-1)*tile_gap_mm)/2;
                 
