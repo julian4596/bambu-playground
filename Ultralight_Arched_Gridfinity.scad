@@ -2,11 +2,15 @@
 // Ultralight Arched Doorway Gridfinity Baseplate
 // ============================================================================
 // A parametric, MakerWorld-compatible OpenSCAD script that generates
-// ultra-lightweight Gridfinity baseplates featuring an arched doorway profile.
+// ultra-lightweight Gridfinity baseplates featuring an arched doorway profile,
+// strictly adhering to the official Gridfinity specification (https://gridfinity.xyz/specification/)
+// and inspired by Paul Bone's gfthings (https://github.com/PaulBone/gfthings).
 //
 // Features:
-//   - Arched doorway cutouts through divider walls extending to bed (Z = 0)
-//   - Continuous 45° top lead-in funnel rim for smooth bin insertion
+//   - Strictly compliant with Gridfinity v5 standards
+//   - Official 3-tier pocket profile on corner pillars (42.0mm top lead-in,
+//     37.7mm waist, 0.7mm chamfered bottom ledge)
+//   - Arched doorway cutouts through divider walls extending to table (Z = 0)
 //   - Sturdy corner pillars with central diamond voids at cell intersections
 //   - Solid outer drawer frame perimeter to prevent dust/debris ingress
 //   - Spacerless auto-fit to drawer dimensions with zero wasted space
@@ -17,13 +21,15 @@
 // License: CC BY-SA 4.0
 // ============================================================================
 
-// ---- Gridfinity Standard Constants ----
-GRID_PITCH  = 42.0;                         // mm - standard grid unit size
-TOLERANCE   = 0.25;                         // mm - clearance per side (bin-to-baseplate)
-POCKET_TOP  = GRID_PITCH - 2 * TOLERANCE;   // 41.5mm - mouth opening at top
-PROFILE_H   = 4.75;                         // mm - standard Gridfinity baseplate height
-CHAMFER_H   = 1.25;                         // mm - 45° top guide chamfer height
-POCKET_MID  = POCKET_TOP - 2 * CHAMFER_H;   // 39.0mm - lower pocket opening at Z = 3.5mm
+include <gridfinity_core.scad>
+
+// ---- Gridfinity Standard Constants (Inherited from gridfinity_core.scad) ----
+GRID_PITCH  = GF_PITCH;          // 42.0 mm standard cell pitch
+TOLERANCE   = GF_TOLERANCE;      // 0.25 mm clearance per side
+PROFILE_H   = GF_PROFILE_H;      // 4.65 mm official socket profile depth
+POCKET_TOP  = GF_SOCKET_TOP_W;   // 42.0 mm socket top opening
+POCKET_MID  = GF_SOCKET_WAIST_W; // 37.7 mm socket vertical waist
+POCKET_BOT  = GF_SOCKET_BOT_W;   // 36.3 mm socket bottom opening
 
 // ============================================================================
 // MakerWorld Customizer Parameters
@@ -73,14 +79,21 @@ enable_labels      = true;
 part_to_render     = 0;     // [0:All (Exploded), 1:Tile 1/1, 2:Tile 2/1, 3:Tile 1/2, 4:Tile 2/2, 5:Tile 3/1, 6:Tile 3/2, 7:Tile 3/3, 8:Tile 4/1, 9:Tile 4/2, 10:Tile 4/3]
 
 /* [Hidden] */
-$fn = 40;
+$fn = 32;
+
+// Allow override from parent scripts / tests
+_act_use_auto_fit = is_undef(_override_use_auto_fit) ? use_auto_fit : _override_use_auto_fit;
+_act_grid_x       = is_undef(_override_manual_grid_x) ? manual_grid_x : _override_manual_grid_x;
+_act_grid_y       = is_undef(_override_manual_grid_y) ? manual_grid_y : _override_manual_grid_y;
+_act_clearance    = is_undef(_override_clearance) ? clearance_per_side : _override_clearance;
+_act_tiling       = is_undef(_override_tiling_mode) ? tiling_mode : _override_tiling_mode;
 
 // ============================================================================
 // Auto-Fit Calculation
 // ============================================================================
 
-_usable_w = drawer_width_mm - 2 * clearance_per_side;
-_usable_d = drawer_depth_mm - 2 * clearance_per_side;
+_usable_w = drawer_width_mm - 2 * _act_clearance;
+_usable_d = drawer_depth_mm - 2 * _act_clearance;
 
 _auto_gx = max(1, floor(_usable_w / GRID_PITCH));
 _auto_gy = max(1, floor(_usable_d / GRID_PITCH));
@@ -88,11 +101,11 @@ _auto_gy = max(1, floor(_usable_d / GRID_PITCH));
 _left_x = _usable_w - _auto_gx * GRID_PITCH;
 _left_y = _usable_d - _auto_gy * GRID_PITCH;
 
-gx = use_auto_fit ? _auto_gx : manual_grid_x;
-gy = use_auto_fit ? _auto_gy : manual_grid_y;
+gx = _act_use_auto_fit ? _auto_gx : _act_grid_x;
+gy = _act_use_auto_fit ? _auto_gy : _act_grid_y;
 
-ext_tx = use_auto_fit ? max(0, _left_x) : 0;
-ext_ty = use_auto_fit ? max(0, _left_y) : 0;
+ext_tx = _act_use_auto_fit ? max(0, _left_x) : 0;
+ext_ty = _act_use_auto_fit ? max(0, _left_y) : 0;
 
 // Extension distribution
 ext_L = (extension_mode == 0) ? floor(ext_tx / 2) :
@@ -108,65 +121,32 @@ total_w = gx * GRID_PITCH + ext_L + ext_R;
 total_d = gy * GRID_PITCH + ext_F + ext_B;
 
 // Tiling calculations
-cells_per_tile_x = tiling_mode ? max(1, floor((bed_x_mm - 2 * bed_safe_margin_mm - 15) / GRID_PITCH)) : gx;
-cells_per_tile_y = tiling_mode ? max(1, floor((bed_y_mm - 2 * bed_safe_margin_mm - 15) / GRID_PITCH)) : gy;
+cells_per_tile_x = _act_tiling ? max(1, floor((bed_x_mm - 2 * bed_safe_margin_mm - 15) / GRID_PITCH)) : gx;
+cells_per_tile_y = _act_tiling ? max(1, floor((bed_y_mm - 2 * bed_safe_margin_mm - 15) / GRID_PITCH)) : gy;
 
-tiles_x = tiling_mode ? ceil(gx / cells_per_tile_x) : 1;
-tiles_y = tiling_mode ? ceil(gy / cells_per_tile_y) : 1;
+tiles_x = _act_tiling ? ceil(gx / cells_per_tile_x) : 1;
+tiles_y = _act_tiling ? ceil(gy / cells_per_tile_y) : 1;
 
 // Debug output
 echo(str("=== Ultralight Arched Doorway Gridfinity ==="));
-echo(str("Grid: ", gx, " x ", gy));
-echo(str("Extensions — L:", ext_L, " R:", ext_R, " F:", ext_F, " B:", ext_B, " mm"));
-echo(str("Total: ", total_w, " x ", total_d, " mm"));
-echo(str("Doorway: ", doorway_width, " x ", doorway_height, " mm"));
-echo(str("Tiling: ", tiles_x, " x ", tiles_y, " tiles (", cells_per_tile_x, "x", cells_per_tile_y, " max cells per tile)"));
+echo(str("Grid: ", gx, " x ", gy, " cells"));
+echo(str("Total Dimensions: ", total_w, " x ", total_d, " mm (Extensions — L:", ext_L, " R:", ext_R, " F:", ext_F, " B:", ext_B, " mm)"));
+echo(str("Doorway Cutout: ", doorway_width, " x ", doorway_height, " mm"));
+echo(str("Socket Dimensions — Mouth: ", POCKET_TOP, " mm, Waist: ", POCKET_MID, " mm, Bottom Ledge: ", POCKET_BOT, " mm"));
 
 // ============================================================================
 // Helper Geometry Modules
 // ============================================================================
 
-// Helper: centered rectangle with rounded corners
-module rounded_centered_rect(w, d, h, r=4.0) {
-    eff_r = min(r, w/2, d/2);
-    if (eff_r > 0.01) {
-        hull() {
-            for (x = [-w/2 + eff_r, w/2 - eff_r]) {
-                for (y = [-d/2 + eff_r, d/2 - eff_r]) {
-                    translate([x, y, 0])
-                        cylinder(r=eff_r, h=h);
-                }
-            }
-        }
-    } else {
-        translate([-w/2, -d/2, 0])
-            cube([w, d, h]);
-    }
-}
-
-// Pocket cutout: 45° top lead-in funnel and through-cut down to table surface
+// Pocket cutout: official 3-tier pocket socket with open bottom & chamfered ledge
 module pocket() {
-    // 45° top guide funnel from Z = PROFILE_H - CHAMFER_H up to PROFILE_H
-    hull() {
-        translate([0, 0, PROFILE_H - CHAMFER_H])
-            rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=4.0 - CHAMFER_H);
-        translate([0, 0, PROFILE_H])
-            rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01, r=4.0);
-    }
-    // Clean upper clearance cut
-    translate([0, 0, PROFILE_H])
-        rounded_centered_rect(POCKET_TOP, POCKET_TOP, 1.0, r=4.0);
-
-    // Through-cut body down to table surface (Z = 0, extended to Z = -1 for clean difference)
-    translate([0, 0, -1.0])
-        rounded_centered_rect(POCKET_MID, POCKET_MID, PROFILE_H - CHAMFER_H + 1.01, r=4.0 - CHAMFER_H);
+    gf_socket_pocket(open_bottom=true, chamfer_ledge=true);
 }
 
 // 2D profile of arched doorway with top corner fillets
 module doorway_profile_2d(w, h, r=4.0) {
     eff_r = min(r, w/2, h);
     hull() {
-        // Extend below Z = 0 for clean difference cut
         translate([-w/2, -1.0])
             square([w, 1.01]);
         if (eff_r > 0.01) {
@@ -189,7 +169,7 @@ module doorway_cutout(w=doorway_width, h=doorway_height, r=4.0, depth=10.0) {
 }
 
 // Central diamond cutout void at 4-way cell intersections
-module diamond_cutout(r=4.25, h=PROFILE_H) {
+module diamond_cutout(r=GF_SOCKET_TOP_R, h=PROFILE_H) {
     translate([0, 0, -1.0])
         linear_extrude(height=h + 2.0)
             difference() {
@@ -212,7 +192,7 @@ module arched_baseplate() {
         // Solid outer frame perimeter and base volume
         cube([total_w, total_d, PROFILE_H]);
 
-        // Subtract bin pockets for each cell
+        // Subtract official bin pockets for each cell
         for (cx = [0 : gx - 1]) {
             for (cy = [0 : gy - 1]) {
                 x = ext_L + cx * GRID_PITCH + GRID_PITCH / 2;
@@ -294,7 +274,7 @@ module tile_label(tx, ty) {
     translate([x, y, 0]) {
         difference() {
             translate([0, 0, 0.4])
-                cube([POCKET_MID + 2.0, POCKET_MID + 2.0, 0.8], center=true);
+                cube([POCKET_BOT, POCKET_BOT, 0.8], center=true);
             translate([0, 0, -1.0])
                 linear_extrude(3.0)
                     text(str(tx + 1, "/", ty + 1), size=8, halign="center", valign="center");
@@ -306,7 +286,7 @@ module tile_label(tx, ty) {
 // Final Render Assembly
 // ============================================================================
 
-if (!tiling_mode) {
+if (!_act_tiling) {
     arched_baseplate();
 } else {
     for (tx = [0 : tiles_x - 1]) {
@@ -314,11 +294,9 @@ if (!tiling_mode) {
             tile_index = 1 + tx + ty * tiles_x;
             
             if (part_to_render == 0 || part_to_render == tile_index) {
-                // Explode translation for scene overview
                 offset_x = (part_to_render == 0) ? tx * tile_gap_mm : 0;
                 offset_y = (part_to_render == 0) ? ty * tile_gap_mm : 0;
                 
-                // Center specific tile on origin for single-part export, or center full exploded assembly
                 center_x = (part_to_render > 0) ? -(ext_L + tx * cells_per_tile_x * GRID_PITCH + (cells_per_tile_x * GRID_PITCH) / 2) : -(total_w + (tiles_x - 1) * tile_gap_mm) / 2;
                 center_y = (part_to_render > 0) ? -(ext_F + ty * cells_per_tile_y * GRID_PITCH + (cells_per_tile_y * GRID_PITCH) / 2) : -(total_d + (tiles_y - 1) * tile_gap_mm) / 2;
                 
