@@ -1,0 +1,10 @@
+{
+    "autodeskProduct": "Fusion",
+    "type": "script",
+    "author": "Julian",
+    "description": {
+        "": "Generates official-specification Gridfinity baseplates natively in Autodesk Fusion 360 with parametric User Parameters."
+    },
+    "supportedOS": "windows|mac",
+    "editEnabled": true
+}
