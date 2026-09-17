@@ -77,7 +77,7 @@ module gf_rounded_rect(w, d, h, r=4) {
 }
 
 // Subtractive pocket socket conforming strictly to gridfinity.xyz v5
-module gf_socket_pocket(open_bottom=true, chamfer_ledge=true, clearance=0, extra_top=1.0) {
+module gf_socket_pocket(open_bottom=true, chamfer_ledge=true, clearance=0, extra_top=1.0, corner_holes=0) {
     top_w   = GF_SOCKET_TOP_W + 2 * clearance;
     waist_w = GF_SOCKET_WAIST_W + 2 * clearance;
     bot_w   = GF_SOCKET_BOT_W + 2 * clearance;
@@ -119,13 +119,29 @@ module gf_socket_pocket(open_bottom=true, chamfer_ledge=true, clearance=0, extra
         }
         // If bottom is open (Style 0 Ultralight), through-cut the center hole down past Z=0
         if (open_bottom) {
-            translate([0, 0, -2])
-                gf_rounded_rect(bot_w, bot_w, 2.01, r=bot_r);
+            translate([0, 0, -2]) {
+                if (corner_holes > 0) {
+                    difference() {
+                        gf_rounded_rect(bot_w, bot_w, 2.01, r=bot_r);
+                        gf_corner_boss_pads(count=corner_holes, h=4);
+                    }
+                } else {
+                    gf_rounded_rect(bot_w, bot_w, 2.01, r=bot_r);
+                }
+            }
         }
     } else {
         // If chamfer_ledge is false, cut the waist width straight to bottom
-        translate([0, 0, open_bottom ? -2 : 0])
-            gf_rounded_rect(waist_w, waist_w, (open_bottom ? 2 : 0) + z_waist_bot + 0.01, r=waist_r);
+        translate([0, 0, open_bottom ? -2 : 0]) {
+            if (open_bottom && corner_holes > 0) {
+                difference() {
+                    gf_rounded_rect(waist_w, waist_w, 2 + z_waist_bot + 0.01, r=waist_r);
+                    gf_corner_boss_pads(count=corner_holes, h=4 + z_waist_bot);
+                }
+            } else {
+                gf_rounded_rect(waist_w, waist_w, (open_bottom ? 2 : 0) + z_waist_bot + 0.01, r=waist_r);
+            }
+        }
     }
 }
 
@@ -171,5 +187,36 @@ module gf_edge_cut(cut_len=26.0, cut_h=GF_PROFILE_H) {
     hull() {
         translate([-short_len/2, -1, 0]) cube([short_len, 2, cut_h]);
         translate([-cut_len/2, -1, cut_h]) cube([cut_len, 2, 0.01]);
+    }
+}
+
+// Solid corner boss pads for screw/magnet retention in skeleton (open floor) baseplates
+module gf_corner_boss_pads(count=0, pad_r=5.5, h=GF_PROFILE_H) {
+    if (count == 2) {
+        _gf_single_boss_pad(-GF_HOLE_OFFSET, -GF_HOLE_OFFSET, pad_r, h);
+        _gf_single_boss_pad( GF_HOLE_OFFSET,  GF_HOLE_OFFSET, pad_r, h);
+    } else if (count >= 4) {
+        for (sx = [-1, 1]) {
+            for (sy = [-1, 1]) {
+                _gf_single_boss_pad(sx * GF_HOLE_OFFSET, sy * GF_HOLE_OFFSET, pad_r, h);
+            }
+        }
+    }
+}
+
+module _gf_single_boss_pad(x, y, pad_r=5.5, h=GF_PROFILE_H) {
+    sx = sign(x);
+    sy = sign(y);
+    corner_x = sx * (GF_PITCH / 2);
+    corner_y = sy * (GF_PITCH / 2);
+    hull() {
+        translate([x, y, 0])
+            cylinder(r=pad_r, h=h);
+        translate([corner_x - sx * 4.0, corner_y - sy * 4.0, 0])
+            cylinder(r=4.0, h=h);
+        translate([corner_x - sx * 4.0, y, 0])
+            cylinder(r=3.0, h=h);
+        translate([x, corner_y - sy * 4.0, 0])
+            cylinder(r=3.0, h=h);
     }
 }

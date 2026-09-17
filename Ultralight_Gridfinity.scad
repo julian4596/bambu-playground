@@ -159,7 +159,7 @@ echo(str("Corner Holes per Cell: ", _act_holes, " (26mm spacing)"));
 // ============================================================================
 
 module pocket() {
-    gf_socket_pocket(open_bottom=(_act_style == 0), chamfer_ledge=_act_ledge);
+    gf_socket_pocket(open_bottom=(_act_style == 0), chamfer_ledge=_act_ledge, corner_holes=_act_holes);
 }
 
 // ============================================================================
@@ -199,6 +199,18 @@ module skeleton_base() {
                 if (w > 0.01 && d > 0.01) {
                     translate([x, y, 0])
                         custom_cell_envelope(w, d, PROFILE_H);
+                }
+            }
+        }
+        // If corner holes are enabled, add corner mounting pads to hold magnets/screws
+        if (_act_holes > 0) {
+            pad_h = _act_ledge ? GF_BOT_CHAMFER_H : (GF_BOT_CHAMFER_H + GF_VERT_WAIST_H);
+            for (cx = [0 : gx - 1]) {
+                for (cy = [0 : gy - 1]) {
+                    x = ext_L + cx * GRID_PITCH + GRID_PITCH / 2;
+                    y = ext_F + cy * GRID_PITCH + GRID_PITCH / 2;
+                    translate([x, y, 0])
+                        gf_corner_boss_pads(count=_act_holes, h=pad_h);
                 }
             }
         }
