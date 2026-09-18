@@ -79,6 +79,8 @@ screw_diameter = 3.2; // [2.5:0.1:4.0]
 /* [07 — Print Bed Tiling] */
 // Splitcut the generated plate (manual or auto-fit) into bed-sized tiles.
 tiling_mode = true;
+// Tile connection method: 0 = Flat Side-by-Side (clean straight seam for drawer fit), 1 = Interlocking Puzzle Tabs
+connector_type = 0; // [0:None (Side-by-Side), 1:Puzzle Tabs]
 // Bed width in mm (tiling only).
 bed_x_mm = 256.0; // [100:0.1:500]
 // Bed depth in mm (tiling only).
@@ -677,9 +679,11 @@ module tile_label_pad(tx, ty) {
         
         translate([x, y, 0]) {
             difference() {
-                // 0.8mm thick solid pad filling the bottom opening of cell (rests on 0.7mm chamfer ledge)
-                translate([0, 0, 0.4])
-                    cube([GF_SOCKET_BOT_W, GF_SOCKET_BOT_W, 0.8], center=true);
+                // 0.8mm thick solid pad overlapping into 0.7mm chamfer ledge for clean 2-manifold fusion
+                linear_extrude(height=0.8) {
+                    offset(r=1.5)
+                        square([38.0 - 3.0, 38.0 - 3.0], center=true);
+                }
                 // Debossed text cut 0.5mm deep into the pad
                 translate([0, 0, 0.3])
                     linear_extrude(height=1.0)
@@ -714,22 +718,24 @@ module single_tile(tx, ty) {
             }
             
             // Male puzzle tabs (East & North borders)
-            if (tx < tiles_x - 1) {
-                // East border
-                for (iy = [y_start_cell : y_end_cell - 1]) {
-                    y_pos = ext_F + iy * GRID_PITCH + GRID_PITCH / 2;
-                    translate([tile_max_x, y_pos, 0])
-                        rotate([0, 0, -90])
-                            puzzle_tab(clearance=0);
+            if (connector_type == 1) {
+                if (tx < tiles_x - 1) {
+                    // East border
+                    for (iy = [y_start_cell : y_end_cell - 1]) {
+                        y_pos = ext_F + iy * GRID_PITCH + GRID_PITCH / 2;
+                        translate([tile_max_x, y_pos, 0])
+                            rotate([0, 0, -90])
+                                puzzle_tab(clearance=0);
+                    }
                 }
-            }
-            if (ty < tiles_y - 1) {
-                // North border
-                for (ix = [x_start_cell : x_end_cell - 1]) {
-                    x_pos = ext_L + ix * GRID_PITCH + GRID_PITCH / 2;
-                    translate([x_pos, tile_max_y, 0])
-                        rotate([0, 0, 0])
-                            puzzle_tab(clearance=0);
+                if (ty < tiles_y - 1) {
+                    // North border
+                    for (ix = [x_start_cell : x_end_cell - 1]) {
+                        x_pos = ext_L + ix * GRID_PITCH + GRID_PITCH / 2;
+                        translate([x_pos, tile_max_y, 0])
+                            rotate([0, 0, 0])
+                                puzzle_tab(clearance=0);
+                    }
                 }
             }
             
@@ -740,22 +746,24 @@ module single_tile(tx, ty) {
         }
         
         // Female puzzle sockets (West & South borders)
-        if (tx > 0) {
-            // West border
-            for (iy = [y_start_cell : y_end_cell - 1]) {
-                y_pos = ext_F + iy * GRID_PITCH + GRID_PITCH / 2;
-                translate([tile_min_x, y_pos, -0.1])
-                    rotate([0, 0, -90])
-                        puzzle_tab(clearance=0.25);
+        if (connector_type == 1) {
+            if (tx > 0) {
+                // West border
+                for (iy = [y_start_cell : y_end_cell - 1]) {
+                    y_pos = ext_F + iy * GRID_PITCH + GRID_PITCH / 2;
+                    translate([tile_min_x, y_pos, -0.1])
+                        rotate([0, 0, -90])
+                            puzzle_tab(clearance=0.25);
+                }
             }
-        }
-        if (ty > 0) {
-            // South border
-            for (ix = [x_start_cell : x_end_cell - 1]) {
-                x_pos = ext_L + ix * GRID_PITCH + GRID_PITCH / 2;
-                translate([x_pos, tile_min_y, -0.1])
-                    rotate([0, 0, 0])
-                        puzzle_tab(clearance=0.25);
+            if (ty > 0) {
+                // South border
+                for (ix = [x_start_cell : x_end_cell - 1]) {
+                    x_pos = ext_L + ix * GRID_PITCH + GRID_PITCH / 2;
+                    translate([x_pos, tile_min_y, -0.1])
+                        rotate([0, 0, 0])
+                            puzzle_tab(clearance=0.25);
+                }
             }
         }
     }
@@ -767,12 +775,8 @@ module single_tile(tx, ty) {
 
 if (!_act_tiling) {
     // Single monolithic plate (centered on build plate at 0, 0)
-    translate([-total_w / 2, -total_d / 2, 0]) {
+    translate([-total_w / 2, -total_d / 2, 0])
         full_baseplate();
-        if (enable_labels) {
-            tile_label_pad(0, 0);
-        }
-    }
 } else {
     // Tiled mode
     if (part_to_render == 0) {
