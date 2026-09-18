@@ -58,6 +58,10 @@ Table / Drawer Surface ───────────┴───────
 | **1: Standard** | 0.4 mm (1 layer) | Full floor | Lightweight trays needing dust barrier under bins. |
 | **2: Solid** | 1.2 mm (3 layers) | Full floor | Heavy-duty workshop toolboxes and machinery mounts. |
 
+### Extension & Spacer Variants
+- **Full-Perimeter Extensions (`Ultralight_Gridfinity.scad`)**: Generates continuous outer boundary walls around all 4 sides of the drawer.
+- **Corner Bumper Tabs (`Ultralight_Corner_Spacers_Gridfinity.scad`)**: Generates discrete dual-window standoff tabs at cell 2 and cell $N-1$ on each edge, eliminating perimeter plastic between corners while rigidly bracing against drawer sliding.
+
 ---
 
 ## 4. OpenSCAD Boilerplate Parameters

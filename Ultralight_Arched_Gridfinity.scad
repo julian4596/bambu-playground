@@ -21,15 +21,6 @@
 // License: CC BY-SA 4.0
 // ============================================================================
 
-include <gridfinity_core.scad>
-
-// ---- Gridfinity Standard Constants (Inherited from gridfinity_core.scad) ----
-GRID_PITCH  = GF_PITCH;          // 42.0 mm standard cell pitch
-TOLERANCE   = GF_TOLERANCE;      // 0.25 mm clearance per side
-PROFILE_H   = GF_PROFILE_H;      // 4.65 mm official socket profile depth
-POCKET_TOP  = GF_SOCKET_TOP_W;   // 42.0 mm socket top opening
-POCKET_MID  = GF_SOCKET_WAIST_W; // 37.7 mm socket vertical waist
-POCKET_BOT  = GF_SOCKET_BOT_W;   // 36.3 mm socket bottom opening
 
 // ============================================================================
 // MakerWorld Customizer Parameters
@@ -80,6 +71,32 @@ part_to_render     = 0;     // [0:All (Exploded), 1:Tile 1/1, 2:Tile 2/1, 3:Tile
 
 /* [Hidden] */
 $fn = 32;
+
+// ---- Official Gridfinity v5 Constants (gridfinity.xyz) ----
+GF_PITCH            = 42.0;   // Standard cell spacing (mm)
+GF_TOLERANCE        = 0.25;   // Clearance per side (mm)
+
+// Baseplate Socket Dimensions (+0.25mm Clearance Offset)
+GF_SOCKET_TOP_W     = 42.00;  // Top mouth opening (mm)
+GF_SOCKET_WAIST_W   = 37.70;  // 37.2 + 2 * 0.25 (mm)
+GF_SOCKET_BOT_W     = 36.30;  // 37.7 - 2 * 0.70 (mm)
+
+GF_TOP_CHAMFER_H    = 2.15;   // Top lead-in chamfer height (mm)
+GF_VERT_WAIST_H     = 1.80;   // Straight vertical waist height (mm)
+GF_BOT_CHAMFER_H    = 0.70;   // Bottom seating chamfer height (mm)
+GF_PROFILE_H        = GF_TOP_CHAMFER_H + GF_VERT_WAIST_H + GF_BOT_CHAMFER_H; // 4.65 mm
+
+// Corner Radii (Concentric with 4.0mm outer envelope)
+GF_SOCKET_TOP_R     = 4.00;   // 8.0mm dia
+GF_SOCKET_WAIST_R   = GF_SOCKET_TOP_R - GF_TOP_CHAMFER_H; // 1.85 mm (3.7mm dia)
+GF_SOCKET_BOT_R     = GF_SOCKET_WAIST_R - GF_BOT_CHAMFER_H; // 1.15 mm (2.3mm dia)
+
+GRID_PITCH          = GF_PITCH;
+TOLERANCE           = GF_TOLERANCE;
+PROFILE_H           = GF_PROFILE_H;
+POCKET_TOP          = GF_SOCKET_TOP_W;
+POCKET_MID          = GF_SOCKET_WAIST_W;
+POCKET_BOT          = GF_SOCKET_BOT_W;
 
 // Allow override from parent scripts / tests
 _act_use_auto_fit = is_undef(_override_use_auto_fit) ? use_auto_fit : _override_use_auto_fit;
@@ -135,8 +152,75 @@ echo(str("Doorway Cutout: ", doorway_width, " x ", doorway_height, " mm"));
 echo(str("Socket Dimensions — Mouth: ", POCKET_TOP, " mm, Waist: ", POCKET_MID, " mm, Bottom Ledge: ", POCKET_BOT, " mm"));
 
 // ============================================================================
-// Helper Geometry Modules
+// Helper Geometry Modules (Self-Contained for MakerWorld)
 // ============================================================================
+
+module gf_rounded_rect(w, d, h, r=4) {
+    eff_r = min(r, w/2 - 0.01, d/2 - 0.01);
+    if (eff_r > 0.01) {
+        hull() {
+            for (x = [-w/2 + eff_r, w/2 - eff_r]) {
+                for (y = [-d/2 + eff_r, d/2 - eff_r]) {
+                    translate([x, y, 0])
+                        cylinder(r=eff_r, h=h);
+                }
+            }
+        }
+    } else {
+        translate([-w/2, -d/2, 0])
+            cube([w, d, h]);
+    }
+}
+
+module gf_socket_pocket(open_bottom=true, chamfer_ledge=true, clearance=0, extra_top=1.0) {
+    top_w   = GF_SOCKET_TOP_W + 2 * clearance;
+    waist_w = GF_SOCKET_WAIST_W + 2 * clearance;
+    bot_w   = GF_SOCKET_BOT_W + 2 * clearance;
+    
+    top_r   = max(0.1, GF_SOCKET_TOP_R + clearance);
+    waist_r = max(0.1, GF_SOCKET_WAIST_R + clearance);
+    bot_r   = max(0.1, GF_SOCKET_BOT_R + clearance);
+    
+    z_bot = 0;
+    z_waist_bot = GF_BOT_CHAMFER_H;
+    z_waist_top = GF_BOT_CHAMFER_H + GF_VERT_WAIST_H;
+    z_top = GF_PROFILE_H;
+    
+    hull() {
+        translate([0, 0, z_waist_top])
+            gf_rounded_rect(waist_w, waist_w, 0.01, r=waist_r);
+        translate([0, 0, z_top])
+            gf_rounded_rect(top_w, top_w, 0.01, r=top_r);
+    }
+    
+    if (extra_top > 0) {
+        translate([0, 0, z_top])
+            gf_rounded_rect(top_w, top_w, extra_top, r=top_r);
+    }
+    
+    translate([0, 0, z_waist_bot])
+        gf_rounded_rect(waist_w, waist_w, GF_VERT_WAIST_H + 0.01, r=waist_r);
+    
+    if (chamfer_ledge) {
+        hull() {
+            translate([0, 0, z_bot])
+                gf_rounded_rect(bot_w, bot_w, 0.01, r=bot_r);
+            translate([0, 0, z_waist_bot])
+                gf_rounded_rect(waist_w, waist_w, 0.01, r=waist_r);
+        }
+        if (open_bottom) {
+            translate([0, 0, -2])
+                gf_rounded_rect(bot_w, bot_w, 2.01, r=bot_r);
+        }
+    } else {
+        translate([0, 0, open_bottom ? -2 : 0])
+            gf_rounded_rect(waist_w, waist_w, (open_bottom ? 2 : 0) + z_waist_bot + 0.01, r=waist_r);
+    }
+}
+
+module gf_cell_envelope(w=GF_PITCH, d=GF_PITCH, h=GF_PROFILE_H) {
+    gf_rounded_rect(w, d, h, r=min(GF_SOCKET_TOP_R, w/2, d/2));
+}
 
 // Pocket cutout: official 3-tier pocket socket with open bottom & chamfered ledge
 module pocket() {
