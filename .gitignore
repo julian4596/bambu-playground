@@ -1,3 +1,13 @@
+# Temporary, scratch, and agent internals
 .superpowers/
+docs/superpowers/
 scratch/
+archive/
 *.csg
+
+# Generated CAD & Slicer export files
+export/
+*.step
+*.stp
+*.stl
+*.3mf
