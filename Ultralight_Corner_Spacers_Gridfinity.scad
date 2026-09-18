@@ -78,7 +78,7 @@ screw_diameter = 3.2; // [2.5:0.1:4.0]
 
 /* [07 — Print Bed Tiling] */
 // Splitcut the generated plate (manual or auto-fit) into bed-sized tiles.
-tiling_mode = false;
+tiling_mode = true;
 // Bed width in mm (tiling only).
 bed_x_mm = 256.0; // [100:0.1:500]
 // Bed depth in mm (tiling only).
@@ -667,6 +667,28 @@ module puzzle_tab(clearance=0) {
     }
 }
 
+// Solid 0.8mm bottom pad inside the first cell of a tile with debossed label
+module tile_label_pad(tx, ty) {
+    start_cx = tx * cells_per_tile_x;
+    start_cy = ty * cells_per_tile_y;
+    if (start_cx < gx && start_cy < gy) {
+        x = ext_L + start_cx * GRID_PITCH + GRID_PITCH / 2;
+        y = ext_F + start_cy * GRID_PITCH + GRID_PITCH / 2;
+        
+        translate([x, y, 0]) {
+            difference() {
+                // 0.8mm thick solid pad filling the bottom opening of cell (rests on 0.7mm chamfer ledge)
+                translate([0, 0, 0.4])
+                    cube([GF_SOCKET_BOT_W, GF_SOCKET_BOT_W, 0.8], center=true);
+                // Debossed text cut 0.5mm deep into the pad
+                translate([0, 0, 0.3])
+                    linear_extrude(height=1.0)
+                        text(str(tx + 1, "/", ty + 1), size=8, font="Liberation Sans:style=Bold", halign="center", valign="center");
+            }
+        }
+    }
+}
+
 module single_tile(tx, ty) {
     x_start_cell = tx * cells_per_tile_x;
     x_end_cell   = min(gx, (tx + 1) * cells_per_tile_x);
@@ -710,6 +732,11 @@ module single_tile(tx, ty) {
                             puzzle_tab(clearance=0);
                 }
             }
+            
+            // Solid label pad with engraved coordinates (e.g. 1/1, 2/1)
+            if (enable_labels) {
+                tile_label_pad(tx, ty);
+            }
         }
         
         // Female puzzle sockets (West & South borders)
@@ -731,40 +758,59 @@ module single_tile(tx, ty) {
                         puzzle_tab(clearance=0.25);
             }
         }
-        
-        // Coordinate label
-        if (enable_labels && _act_tiling) {
-            label_text = str(tx + 1, "/", ty + 1);
-            translate([tile_min_x + 8, tile_min_y + 8, PROFILE_H - 0.4]) {
-                linear_extrude(height=0.5) {
-                    text(label_text, size=5, font="Liberation Sans:style=Bold", halign="center", valign="center");
-                }
-            }
-        }
     }
 }
 
-// Scene rendering
+// ============================================================================
+// Scene Rendering & Auto-Centering
+// ============================================================================
+
 if (!_act_tiling) {
-    // Single monolithic plate (no tiling)
-    full_baseplate();
+    // Single monolithic plate (centered on build plate at 0, 0)
+    translate([-total_w / 2, -total_d / 2, 0]) {
+        full_baseplate();
+        if (enable_labels) {
+            tile_label_pad(0, 0);
+        }
+    }
 } else {
     // Tiled mode
     if (part_to_render == 0) {
-        // Exploded view of all tiles
+        // Exploded view of all tiles (centered as a whole assembly at 0, 0)
+        scene_center_x = (total_w + (tiles_x - 1) * tile_gap_mm) / 2;
+        scene_center_y = (total_d + (tiles_y - 1) * tile_gap_mm) / 2;
+        
         for (tx = [0 : tiles_x - 1]) {
             for (ty = [0 : tiles_y - 1]) {
-                translate([tx * (bed_x_mm + tile_gap_mm), ty * (bed_y_mm + tile_gap_mm), 0])
+                offset_x = tx * tile_gap_mm;
+                offset_y = ty * tile_gap_mm;
+                translate([offset_x - scene_center_x, offset_y - scene_center_y, 0])
                     single_tile(tx, ty);
             }
         }
     } else {
-        // Render single selected tile
+        // Render single selected tile (centered exactly at 0, 0 on build plate)
         target_idx = part_to_render - 1;
         target_tx = target_idx % tiles_x;
         target_ty = floor(target_idx / tiles_x);
+        
         if (target_tx < tiles_x && target_ty < tiles_y) {
-            single_tile(target_tx, target_ty);
+            // Find bounding box center of this tile
+            x_start = target_tx * cells_per_tile_x;
+            x_end   = min(gx, (target_tx + 1) * cells_per_tile_x);
+            y_start = target_ty * cells_per_tile_y;
+            y_end   = min(gy, (target_ty + 1) * cells_per_tile_y);
+            
+            t_min_x = (target_tx == 0) ? 0 : (ext_L + x_start * GRID_PITCH);
+            t_max_x = (target_tx == tiles_x - 1) ? total_w : (ext_L + x_end * GRID_PITCH);
+            t_min_y = (target_ty == 0) ? 0 : (ext_F + y_start * GRID_PITCH);
+            t_max_y = (target_ty == tiles_y - 1) ? total_d : (ext_F + y_end * GRID_PITCH);
+            
+            t_center_x = (t_min_x + t_max_x) / 2;
+            t_center_y = (t_min_y + t_max_y) / 2;
+            
+            translate([-t_center_x, -t_center_y, 0])
+                single_tile(target_tx, target_ty);
         } else {
             echo(str("ERROR: part_to_render ", part_to_render, " is out of bounds (max ", tiles_x * tiles_y, ")"));
         }
