@@ -32,7 +32,10 @@ SCREW_D        = 3.2;     // mm - M3 screw hole diameter
 CHAMFER_BOT_H = 0.8;
 WALL_VERT_H   = 1.8;
 CHAMFER_TOP_H = 2.15;
-PROFILE_H     = CHAMFER_BOT_H + WALL_VERT_H + CHAMFER_TOP_H; // ≈ 4.75mm
+FULL_PROFILE_H = CHAMFER_BOT_H + WALL_VERT_H + CHAMFER_TOP_H; // 4.75mm
+LIGHT_PROFILE_H = 4.25; // Overall height measured in the reference screenshots
+// Shorten the open-bottom light plate without changing the upper seating profile.
+LIGHT_BOTTOM_TRIM = FULL_PROFILE_H - LIGHT_PROFILE_H;
 
 // Pocket dimensions (the void bins sit in)
 // At the TOP of the pocket, the opening is the full cell minus tolerance
@@ -63,8 +66,14 @@ manual_grid_x = 4; // [1:1:20]
 manual_grid_y = 4; // [1:1:20]
 
 /* [03 — Baseplate Style] */
-// 0=Super Light (Flat grid, no overhangs), 1=Standard (thin floor), 2=Solid (thick floor)
+// 0=Super Light (4.25mm chamfered rings), 1=Standard (thin floor), 2=Solid (thick floor)
 style = 0; // [0:Super Light, 1:Standard, 2:Solid]
+// Recess a tapered channel into the underside of each light-style cell rail.
+underside_relief = true;
+// Estimated from reference views, not measured: channel height in mm.
+underside_relief_depth = 1.8; // [0.2:0.1:2]
+// Material retained at the inner and outer edges of the channel mouth.
+underside_relief_rim = 0.4; // [0.3:0.05:0.8]
 
 /* [04 — Extension Distribution] */
 // How to distribute leftover space on each axis
@@ -95,6 +104,7 @@ part_to_render = 0; // [0:All (Exploded), 1:Tile 1/1, 2:Tile 2/1, 3:Tile 1/2, 4:
 
 /* [Hidden] */
 $fn = 40;
+PROFILE_H = style == 0 ? LIGHT_PROFILE_H : FULL_PROFILE_H;
 
 // ============================================================================
 // Auto-Fit Calculation
@@ -150,41 +160,74 @@ echo(str("Tiling: ", tiles_x, " x ", tiles_y, " tiles (", cells_per_tile_x, "x",
 
 module pocket() {
     if (style == 0) {
-        // Style 0: Flat-walled pocket with stacking lip recess
-        // This creates uniform wall thickness and the stepped underside flange.
-        
-        // Main through-cut: uniform 41.5mm opening from lip_depth to top
-        translate([0, 0, CHAMFER_BOT_H])
-            rounded_centered_rect(POCKET_TOP, POCKET_TOP, PROFILE_H - CHAMFER_BOT_H + 1, r=4);
-        
-        // Stacking lip: chamfered recess at the very bottom
+        // Reference shows sloped seating faces, not a flat through-opening.
+        // Crop 0.5mm off the standard profile's bottom: remaining lower
+        // chamfer 0.3mm, straight section 1.8mm, upper chamfer 2.15mm.
+        // This crop is an explicit reconstruction assumption; see README.md.
+        translate([0, 0, -LIGHT_BOTTOM_TRIM])
+            standard_pocket();
+    } else {
+        standard_pocket();
+    }
+}
+
+module standard_pocket() {
+        // Standard Gridfinity 3-layer pocket profile.
+        // Tiny overlapping slices avoid gaps between the hulls and wall.
         hull() {
             translate([0, 0, -0.01])
-                rounded_centered_rect(POCKET_TOP + 2 * CHAMFER_BOT_H, POCKET_TOP + 2 * CHAMFER_BOT_H, 0.01, r=4 + CHAMFER_BOT_H);
-            translate([0, 0, CHAMFER_BOT_H])
-                rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01, r=4);
-        }
-    } else {
-        // Standard Gridfinity 3-layer pocket profile
-        hull() {
-            translate([0, 0, 0])
                 rounded_centered_rect(POCKET_BOT, POCKET_BOT, 0.01, r=1.05);
             translate([0, 0, CHAMFER_BOT_H])
                 rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
         }
         
-        translate([0, 0, CHAMFER_BOT_H])
-            rounded_centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H, r=1.85);
+        translate([0, 0, CHAMFER_BOT_H - 0.01])
+            rounded_centered_rect(POCKET_MID, POCKET_MID, WALL_VERT_H + 0.02, r=1.85);
         
         hull() {
             translate([0, 0, CHAMFER_BOT_H + WALL_VERT_H])
                 rounded_centered_rect(POCKET_MID, POCKET_MID, 0.01, r=1.85);
-            translate([0, 0, PROFILE_H])
+            translate([0, 0, FULL_PROFILE_H])
                 rounded_centered_rect(POCKET_TOP, POCKET_TOP, 0.01, r=4);
         }
         
-        translate([0, 0, PROFILE_H])
+        translate([0, 0, FULL_PROFILE_H])
             rounded_centered_rect(POCKET_TOP, POCKET_TOP, 1, r=4);
+}
+
+// Annular underside cutter. Both boundaries taper toward a narrow roof,
+// making a recessed channel rather than removing the inner seating lip.
+// All rounded contours share the cell's corner centers (radius 4.25mm).
+module cell_underside_relief() {
+    bottom_opening = POCKET_BOT + 2 * LIGHT_BOTTOM_TRIM;
+    rail_width = (GRID_PITCH - bottom_opening) / 2;
+    outer_inset = underside_relief_rim;
+    inner_inset = rail_width - underside_relief_rim;
+    center_inset = (outer_inset + inner_inset) / 2;
+    roof_half_width = 0.15;
+    depth = underside_relief_depth;
+    assert(inner_inset > outer_inset, "Underside relief rim is too wide");
+    assert(depth > 0 && depth <= CHAMFER_BOT_H - LIGHT_BOTTOM_TRIM + WALL_VERT_H - 0.1,
+           "Underside relief is too deep for the seating profile");
+    difference() {
+        hull() {
+            translate([0, 0, -0.02])
+                rounded_centered_rect(GRID_PITCH - 2 * outer_inset,
+                    GRID_PITCH - 2 * outer_inset, 0.02, r=4.25 - outer_inset);
+            translate([0, 0, depth])
+                rounded_centered_rect(GRID_PITCH - 2 * (center_inset - roof_half_width),
+                    GRID_PITCH - 2 * (center_inset - roof_half_width), 0.01,
+                    r=4.25 - center_inset + roof_half_width);
+        }
+        hull() {
+            translate([0, 0, -0.03])
+                rounded_centered_rect(GRID_PITCH - 2 * inner_inset,
+                    GRID_PITCH - 2 * inner_inset, 0.03, r=4.25 - inner_inset);
+            translate([0, 0, depth])
+                rounded_centered_rect(GRID_PITCH - 2 * (center_inset + roof_half_width),
+                    GRID_PITCH - 2 * (center_inset + roof_half_width), 0.03,
+                    r=4.25 - center_inset - roof_half_width);
+        }
     }
 }
 
@@ -234,9 +277,9 @@ module custom_ring(w, d, h) {
 // Ultralight skeleton: thin walls with thick intersection hubs
 module skeleton_base() {
     if (style == 0) {
-        // "Lightest Baseplate" style: Use offset rings that perfectly merge
-        // on the straights (forming 4.8mm walls) and pull away at the corners
-        // (forming diamond holes). The outer boundary naturally has r=6.4 corners.
+        // Rounded cell outlines merge along straight sides and pull apart
+        // at corners, leaving concave diamond holes at intersections.
+        // Outer radius is 4.25mm; seating faces use the three-stage profile.
         // Extensions are drawn using custom-sized hollow rings to match the style.
         h = PROFILE_H; // Use full height to allow 3D chamfers
         
@@ -428,8 +471,11 @@ module ultralight_spacerless_baseplate() {
             for (cy = [0:gy-1]) {
                 x = ext_L + cx * GRID_PITCH + GRID_PITCH / 2;
                 y = ext_F + cy * GRID_PITCH + GRID_PITCH / 2;
-                translate([x, y, -0.01])
+                translate([x, y, 0])
                     pocket();
+                if (style == 0 && underside_relief)
+                    translate([x, y, 0])
+                        cell_underside_relief();
             }
         }
         
